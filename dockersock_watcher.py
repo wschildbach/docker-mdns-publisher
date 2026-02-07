@@ -140,7 +140,6 @@ class LocalHostWatcher():
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
-            logger.warning('"%s" needs to end with a period',cname)
             cname += '.'
 
         # consider catching zeroconf._exceptions.BadTypeInNameException
@@ -148,8 +147,6 @@ class LocalHostWatcher():
             info = self.mkinfo(cname)
             self.zeroconf.register_service(info)
         except BadTypeInNameException as error:
-                # in some cases, containers may have already gone away when we process the event.
-                # consider this harmless but log an error
                 logger.error("%s",error)
                 logger.warning("ignoring the service announcement for %s",cname)
 
