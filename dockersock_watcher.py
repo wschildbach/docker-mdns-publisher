@@ -118,10 +118,9 @@ class LocalHostWatcher():
     def __del__(self):
         logger.info("deregistering all registered hostnames")
 
-        if self.zeroconf is not None:
+        if hasattr(self,"zeroconf"):
             self.zeroconf.close()
-
-        del self.zeroconf # not strictly necessary but safe
+            del self.zeroconf # not strictly necessary but safe
 
     def mkinfo(self,cname,serviceType="_http._tcp.local."):
         self.hostIndex += 1
