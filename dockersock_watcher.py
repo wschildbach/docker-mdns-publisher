@@ -40,7 +40,7 @@ LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
 IP_VERSION = IPVersion.V4Only
 # The adapter(s) to listen on. If empty, will listen on all of them
 # we will listen and publish on all ip adresses of these adapters
-ADAPTERS = os.environ.get("ADAPTERS", netifaces.interfaces())
+ADAPTERS = os.environ.get("ADAPTERS")
 EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
 logger = logging.getLogger("docker-mdns-publisher")
@@ -82,6 +82,20 @@ class LocalHostWatcher():
 
         if IP_VERSION != IPVersion.V4Only:
             raise exception("IP_VERSION %s not supported",IP_VERSION)
+
+        # check if all interface names actually exist
+        if "ADAPTERS" in os.environ:
+            ADAPTERS = os.environ.get("ADAPTERS").split(',')
+        else:
+            ADAPTERS = netifaces.interfaces()
+            logger.debug("publishing on all interfaces: %s", ADAPTERS)
+
+        for a in ADAPTERS:
+            try:
+                netifaces.ifaddresses(a)
+            except ValueError as error:
+                logger.critical("invalid adapter/interface name %s",a)
+                raise error # and re-raise the error
 
         # determine all adresses from the listed adapters.
         # filter against exclusion list (to disallow docker networks, for example)
