@@ -21,44 +21,80 @@ __version__ = "0.10.5"
 
 import os
 import re
+import socket
 import logging
+import ifaddr
+import ipaddress
+import netifaces
 from urllib.error import URLError
+from zeroconf import IPVersion, ServiceInfo, Zeroconf
 import docker # pylint: disable=import-error
 
-PUBLISH_TTL = os.environ.get("TTL","120")
-# You can switch off the use of avahi for debugging if your local system
-# does not have the avahi daemon running
-USE_AVAHI = os.environ.get("USE_AVAHI","yes") == "yes"
+# standard TTL is an hour
+PUBLISH_TTL = int(os.environ.get("TTL","3600"))
 # These are the standard python log levels
 LOGGING_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 # get local domain from enviroment and escape all period characters
 LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
+# for now, hardcoded to IPv4 only
+IP_VERSION = IPVersion.V4Only
+# The adapter(s) to listen on. If empty, will listen on all of them
+# we will listen and publish on all ip adresses of these adapters
+ADAPTERS = os.environ.get("ADAPTERS", netifaces.interfaces())
+EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
 logger = logging.getLogger("docker-mdns-publisher")
 logging.basicConfig(level=LOGGING_LEVEL)
 
-if USE_AVAHI:
-    from mpublisher import AvahiPublisher # pylint: disable=import-error
-
 class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
-    Publish and unpublish mDNS records to Avahi, using D-BUS."""
+    Publish and unpublish mDNS records."""
 
     # Set up compiler regexes to find relevant labels / containers
     hostrule = re.compile(r'mdns\.publish')
     hostnamerule = re.compile(r'^\s*[\w\-\.]+\s*$')
-    localrule = re.compile(r'.+'+LOCAL_DOMAIN)
+    localrule = re.compile(r'.+'+LOCAL_DOMAIN+r'\.?')
 
-    def __init__(self,dockerclient,ttl=PUBLISH_TTL):
-        """set up AvahiPublisher and docker connection"""
+    def __init__(self,dockerclient):
+        """set up the mdns registry"""
+
+        def adapter_ips(adapters):
+            """return a list of all suitable ip adresses.
+            Addresses are taken from non-local IPv4 addresses that do not belong to
+            any of the subnets configured in EXCLUDED_NETS"""
+
+            def has_IPv4(a):
+                return netifaces.AF_INET in netifaces.ifaddresses(a)
+
+            def non_local(ip):
+                return "broadcast" in ip
+
+            def in_excluded_networks(ip,nets):
+                return any(ipaddress.ip_address(ip) in n for n in nets)
+
+            excluded_nets = list(ipaddress.ip_network(n) for n in EXCLUDED_NETS.split(",") if n != "")
+            return list(ip["addr"]
+                  for a in adapters if has_IPv4(a)
+                  for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
+                  if non_local(ip) and not in_excluded_networks(ip["addr"],excluded_nets))
+
         logger.debug("LocalHostWatcher.__init__()")
+
+        if IP_VERSION != IPVersion.V4Only:
+            raise exception("IP_VERSION %s not supported",IP_VERSION)
+
+        # determine all adresses from the listed adapters.
+        # filter against exclusion list (to disallow docker networks, for example)
+        self.interfaces = adapter_ips(ADAPTERS)
+
+        logger.debug("listening on interfaces %s", self.interfaces)
+
+        # to make unique service instance names host1, host2, ....
+        self.hostIndex = 0
 
         try:
             self.dockerclient = dockerclient
-            if USE_AVAHI:
-                self.avahi = AvahiPublisher(record_ttl=ttl)
-                if not self.avahi.available():
-                    raise Exception("avahi daemon not available") # pylint: disable=broad-exception-raised
+            self.zeroconf = Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
 
         except Exception as exception:
             # we don't really know which errors to expect here so we catch them all and re-throw
@@ -68,35 +104,47 @@ class LocalHostWatcher():
     def __del__(self):
         logger.info("deregistering all registered hostnames")
 
-        # this code is lifted from mpublisher
-        for group in self.avahi.published.values():
-            group.Reset()
+        if self.zeroconf is not None:
+            self.zeroconf.close()
 
-        del self.avahi # not strictly necessary but safe
+        del self.zeroconf # not strictly necessary but safe
+
+    def mkinfo(self,cname,serviceType="_http._tcp.local."):
+        self.hostIndex += 1
+
+        return ServiceInfo(
+            serviceType,
+            f"host{self.hostIndex}.{serviceType}",
+            addresses=self.interfaces,
+            port=80,
+            host_ttl=PUBLISH_TTL,
+            server = cname
+        )
 
     def publish(self,cname):
-        """ publish the given cname using avahi """
+        """ publish the given cname """
         logger.info("publishing %s",cname)
-        if USE_AVAHI:
-            logger.debug("checking whether %s has already been published", cname)
-            res = self.avahi.resolve(cname)
-            if res is not None:
-                # This has already been published
-                logger.error("trying to publish %s which has already been published by %s",
-                              cname, res)
-                return False
-            logger.debug("... not published. %s is available", cname)
 
-            status = self.avahi.publish_cname(cname, False)
-            if not status:
-                logger.error("Failed to publish '%s'", cname)
-                return False
+        # the FQDN needs to end with a dot. Supply one to be user friendly
+        if not cname.endswith('.'):
+            logger.warning('"%s" needs to end with a period',cname)
+            cname += '.'
+
+        # consider catching zeroconf._exceptions.BadTypeInNameException
+        try:
+            info = self.mkinfo(cname)
+            self.zeroconf.register_service(info)
+        except BadTypeInNameException as error:
+                # in some cases, containers may have already gone away when we process the event.
+                # consider this harmless but log an error
+                logger.error("%s",error)
+                logger.warning("ignoring the service announcement for %s",cname)
 
     def unpublish(self,cname):
-        """ unpublish the given cname using avahi """
+        """ unpublish the given cname """
         logger.info("unpublishing %s",cname)
-        if USE_AVAHI:
-            self.avahi.unpublish(cname)
+        info = self.mkinfo(cname)
+        self.zeroconf.unregister_service(info)
 
     def process_event(self,event):
         """when start/stop events are received, process the container that triggered the event """
