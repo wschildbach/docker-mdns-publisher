@@ -4,7 +4,7 @@ docker-mdns-publisher is a daemon designed to work with docker, best used with `
 
 It sits in the background, waiting for containers that are started. If the containers expose
 a specific label, then the daemon interprets the label as a local hostname and registers it
-with the avahi daemon.
+with a local mdns server (python-zeroconf).
 
 This makes it very convenient to run docker containers that expose services to the local
 network, using .local domain labels to access them.
@@ -16,15 +16,17 @@ Create an empty directory, and create a compose.yml file:
 ```
 services:
   docker-mdns-publisher:
-    image: ghcr.io/wschildbach/docker-mdns-publisher:0.10
+    image: ghcr.io/wschildbach/docker-mdns-publisher:latest # you may want to pin the version
     read_only: true
     restart: on-failure:10
-    privileged: true # the service needs to run privileged for access to the D-BUS
+    network_mode: host # unless port 5353 is free, we need host networking
     environment:
       - LOG_LEVEL=INFO # INFO is the default
+      - PYTHONUNBUFFERED=1 # for prompter logging
+      - "EXCLUDED_NETS=172.16.0.0/16" # exclude docker networks (adapt to your machine)
     volumes:
+      # we need access to the docker socket to read other service labels
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
 ```
 
 Then issue `docker compose up -d`, and/or make sure that whenever your system starts up, this service gets started too.
@@ -42,11 +44,17 @@ docker-mdns-publisher-1  | INFO:docker-mdns-publisher:publishing test1.local
 ### Configuration
 
 **TTL**
- > This sets the TTL for the mDNS publication, in seconds. The default is 120 seconds.
+ > This sets the TTL for the mDNS publication, in seconds. The default is an hour.
 
 **LOG_LEVEL**
 > This sets the verbosity of logging. Use the [log levels of the python logging module](https://docs.python.org/3/library/logging.html#logging-levels)
 (CRITICAL, ERROR, WARNING, INFO, DEBUG). The default is INFO.
+
+**ADAPTERS**
+> A list of adapters on which the mdns server listens and publishes. If empty, uses all non-local IPv4 adapters.
+
+**EXCLUDED_NETS**
+> A comma-separated list of networks to exclude. This can be used to exclude docker-internal networks.
 
 ## Using with your services
 
@@ -57,7 +65,7 @@ daemon then publishes `myhost.local` through avahi, using the local interface ad
 More than one comma-separated names can be given in the label.
 
 When the container is stopped, the host is unpublished. Depending on the TTL, it may take some
-seconds to minutes until the change becomes effective.
+time until the change becomes effective.
 
 If you are using traefik, then more than one service can be hosted behind the same port.
 
