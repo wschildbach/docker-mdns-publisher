@@ -74,7 +74,9 @@ class LocalHostWatcher():
             def in_excluded_networks(ip,nets):
                 return any(ipaddress.ip_address(ip) in n for n in nets)
 
-            excluded_nets = list(ipaddress.ip_network(n) for n in EXCLUDED_NETS.split(",") if n != "")
+            excluded_nets = list(ipaddress.ip_network(n)
+                                 for n in EXCLUDED_NETS.split(",") if n != "")
+
             return list(ip["addr"]
                   for a in adapters if has_ip_v4(a)
                   for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
@@ -161,11 +163,14 @@ class LocalHostWatcher():
                 zeroconf.ServiceNameAlreadyRegistered) as error:
 
             if isinstance(error, zeroconf.BadTypeInNameException):
-                logger.error("zero conf: bad type in name %s: %s -- ignoring the service announcement",cname,error.args)
+                logger.error("zero conf: bad type in name %s: %s \
+                                        -- ignoring the service announcement",cname,error.args)
             if isinstance(error, zeroconf.NonUniqueNameException):
-                logger.error("zero conf: %s is already registered -- ignoring the service announcement",cname)
+                logger.error("zero conf: %s is already registered \
+                                       -- ignoring the service announcement",cname)
             if isinstance(error, zeroconf.ServiceNameAlreadyRegistered):
-                logger.error("zero conf: service name %s is already registered -- ignoring the service announcement",cname)
+                logger.error("zero conf: service name %s is already registered \
+                                        -- ignoring the service announcement",cname)
 
     def unpublish(self,cname,port):
         """ unpublish the given cname """
