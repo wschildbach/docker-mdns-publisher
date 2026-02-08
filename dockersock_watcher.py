@@ -125,21 +125,23 @@ class LocalHostWatcher():
             self.zeroconf.close()
             del self.zeroconf # not strictly necessary but safe
 
-    def mkinfo(self,cname,serviceType="_http._tcp.local."):
+    def mkinfo(self,cname,port,serviceType="_http._tcp.local.",props={}):
         self.hostIndex += 1
 
         return zeroconf.ServiceInfo(
             serviceType,
             f"host{self.hostIndex}.{serviceType}",
             addresses=self.interfaces,
-            port=80,
+            port=port,
             host_ttl=PUBLISH_TTL,
-            server = cname
+            server = cname,
+            properties=props
         )
 
-    def publish(self,cname):
+    def publish(self,cname,port,props):
         """ publish the given cname """
-        logger.info("publishing %s",cname)
+        logger.info("publishing %s:%d",cname,port)
+        props = props or {}
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
@@ -147,7 +149,7 @@ class LocalHostWatcher():
 
         # consider catching zeroconf._exceptions.BadTypeInNameException
         try:
-            info = self.mkinfo(cname)
+            info = self.mkinfo(cname,port,props=props)
             self.zeroconf.register_service(info)
         except (
                 zeroconf.BadTypeInNameException,
@@ -156,10 +158,10 @@ class LocalHostWatcher():
                 logger.error("%s",error)
                 logger.warning("ignoring the service announcement for %s",cname)
 
-    def unpublish(self,cname):
+    def unpublish(self,cname,port):
         """ unpublish the given cname """
-        logger.info("unpublishing %s",cname)
-        info = self.mkinfo(cname)
+        logger.info("unpublishing %s:%d",cname,port)
+        info = self.mkinfo(cname,port)
         self.zeroconf.unregister_service(info)
 
     def process_event(self,event):
@@ -180,9 +182,17 @@ class LocalHostWatcher():
              registers or deregisters it"""
 
         hosts = container.labels.get("mdns.publish")
+        txt = container.labels.get("mdns.txt")
+        if txt is not None:
+            txt = dict([tuple(t.split('=')) for t in txt.split(',')])
 
         if hosts is not None:
             for cname in hosts.split(','):
+                # these may not be necessary. python-zeroconf does pretty throrough checking.
+                port = 80
+                if ":" in cname:
+                    cname,port = cname.split(':')
+                    port=int(port)
                 if not self.localrule.match(cname):
                     logger.error("cannot register non-local hostname %s; rejected", cname)
                     continue
@@ -193,12 +203,12 @@ class LocalHostWatcher():
                 # if the cname looks valid, either register or deregister it
                 if action == 'start':
                     try:
-                        self.publish(cname)
+                        self.publish(cname,port,props=txt)
                     except KeyError:
                         logger.warning("registering previously registered %s",cname)
                 elif action == 'die':
                     try:
-                        self.unpublish(cname)
+                        self.unpublish(cname,port)
                     except KeyError:
                         logger.warning("unregistering previously unregistered %s",cname)
 
