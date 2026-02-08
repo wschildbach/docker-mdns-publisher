@@ -1,16 +1,16 @@
 services:
   docker-mdns-publisher:
-    image: ghcr.io/wschildbach/docker-mdns-publisher:0.10
+    image: ghcr.io/wschildbach/docker-mdns-publisher:1
     build: .
     read_only: true
     restart: on-failure:10
-    privileged: true
+    network_mode: host
     environment:
       - LOG_LEVEL=INFO # INFO is the default
-      - PYTHONUNBUFFERED=1
+      - TTL=120
+      - PYTHONUNBUFFERED=1 # more responsive logging
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket:ro
 
 # the rest of this file are test/debug services that start, wait a while, then die
   test1:

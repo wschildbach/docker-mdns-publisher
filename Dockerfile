@@ -6,7 +6,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
           rm -f /etc/apt/apt.conf.d/docker-clean && \
           apt-get update && \
           apt-get --yes upgrade && \
-          apt-get --yes install build-essential python3 libdbus-glib-1-dev pip && \
+          apt-get --yes install build-essential python3 pip && \
           apt-get --yes install pkg-config cmake python3-venv
 
 # during build, no need to run as user
@@ -33,12 +33,11 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
           --mount=target=/var/cache/apt,type=cache,sharing=locked \
           rm -f /etc/apt/apt.conf.d/docker-clean && \
           apt-get update && \
-          apt-get --yes upgrade && \
-          apt-get --yes install libdbus-1-3
+          apt-get --yes upgrade
 
-RUN mkdir /helper
-COPY --from=build-stage /helper /helper
+RUN mkdir /publisher
+COPY --from=build-stage /helper /publisher
 
-CMD ["/helper/bin/python3","/helper/dockersock_watcher.py"]
+CMD ["/publisher/bin/python3","/publisher/dockersock_watcher.py"]
 
 EXPOSE 5353/udp

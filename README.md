@@ -16,7 +16,7 @@ Create an empty directory, and create a compose.yml file:
 ```
 services:
   docker-mdns-publisher:
-    image: ghcr.io/wschildbach/docker-mdns-publisher:latest # you may want to pin the version
+    image: ghcr.io/wschildbach/docker-mdns-publisher:1
     read_only: true
     restart: on-failure:10
     network_mode: host # unless port 5353 is free, we need host networking
