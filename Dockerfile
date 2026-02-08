@@ -16,8 +16,8 @@ USER helper
 RUN python3 -m venv /helper && \
           /helper/bin/pip install --upgrade pip && \
           /helper/bin/pip install docker && \
-          /helper/bin/pip install dbus-python && \
-          /helper/bin/pip install mdns-publisher
+	  /helper/bin/pip install zeroconf && \
+	  /helper/bin/pip install netifaces
 
 COPY dockersock_watcher.py /helper
 
@@ -40,3 +40,5 @@ RUN mkdir /helper
 COPY --from=build-stage /helper /helper
 
 CMD ["/helper/bin/python3","/helper/dockersock_watcher.py"]
+
+EXPOSE 5353/udp
