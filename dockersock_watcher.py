@@ -54,8 +54,7 @@ class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
     Publish and unpublish mDNS records."""
 
-    # Set up compiler regexes to find relevant labels / containers
-    hostrule = re.compile(r'mdns\.publish')
+    # Set up compiler regexes to find sanitize labels
     hostnamerule = re.compile(r'^\s*[\w\-\.]+\s*$')
     localrule = re.compile(r'.+'+LOCAL_DOMAIN+r'\.?')
 
@@ -180,14 +179,9 @@ class LocalHostWatcher():
              Checks whether the container has a label "mdns.publish" and if so, either
              registers or deregisters it"""
 
-        mdns_labels = list(filter(self.hostrule.match, container.labels.keys()))
-        if len(mdns_labels) > 1:
-            # This cannot happen. If more than one label with the same key is supplied,
-            # subsequent labels override preceding labels
-            logger.warning("more than one mdns.publish label per container are not supported")
+        hosts = container.labels.get("mdns.publish")
 
-        if len(mdns_labels) > 0:
-            hosts = container.labels[mdns_labels[0]]
+        if hosts is not None:
             for cname in hosts.split(','):
                 if not self.localrule.match(cname):
                     logger.error("cannot register non-local hostname %s; rejected", cname)
