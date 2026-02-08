@@ -112,8 +112,6 @@ class LocalHostWatcher():
     def __init__(self,dockerclient):
         """set up the mdns registry"""
 
-        # to make unique service instance names host1, host2, ....
-        self.host_index = 0
         self.dockerclient = dockerclient
         self.interfaces = None
         self.zeroconf = None
@@ -127,11 +125,11 @@ class LocalHostWatcher():
         if props is None:
             props = {}
 
-        self.host_index += 1
+        cname_host = cname.split(".")[0]
 
         return zeroconf.ServiceInfo(
             service_type,
-            f"host{self.host_index}.{service_type}",
+            f"{cname_host}.{service_type}",
             addresses=self.interfaces,
             port=port,
             host_ttl=PUBLISH_TTL,
