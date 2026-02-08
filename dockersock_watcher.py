@@ -42,6 +42,7 @@ IP_VERSION = zeroconf.IPVersion.V4Only
 # The adapter(s) to listen on. If empty, will listen on all of them
 # we will listen and publish on all ip adresses of these adapters
 ADAPTERS = os.environ.get("ADAPTERS")
+# The networks that are excluded from publishing
 EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
 logger = logging.getLogger("docker-mdns-publisher")
@@ -97,14 +98,14 @@ class LocalHostWatcher():
             try:
                 netifaces.ifaddresses(a)
             except ValueError as error:
-                logger.critical("invalid adapter/interface name %s",a)
+                logger.critical('invalid adapter/interface name "%s": %s',a,error)
                 raise error # and re-raise the error
 
         # determine all adresses from the listed adapters.
         # filter against exclusion list (to disallow docker networks, for example)
         self.interfaces = adapter_ips(ADAPTERS)
 
-        logger.debug("listening on interfaces %s", self.interfaces)
+        logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
         # to make unique service instance names host1, host2, ....
         self.hostIndex = 0
@@ -115,7 +116,7 @@ class LocalHostWatcher():
 
         except Exception as exception:
             # we don't really know which errors to expect here so we catch them all and re-throw
-            logger.critical("%s",exception)
+            logger.critical("%s",exception.args)
             raise exception
 
     def __del__(self):
@@ -147,7 +148,6 @@ class LocalHostWatcher():
         if not cname.endswith('.'):
             cname += '.'
 
-        # consider catching zeroconf._exceptions.BadTypeInNameException
         try:
             info = self.mkinfo(cname,port,props=props)
             self.zeroconf.register_service(info)
@@ -155,8 +155,13 @@ class LocalHostWatcher():
                 zeroconf.BadTypeInNameException,
                 zeroconf.NonUniqueNameException,
                 zeroconf.ServiceNameAlreadyRegistered) as error:
-                logger.error("%s",error)
-                logger.warning("ignoring the service announcement for %s",cname)
+
+            if type(error) is zeroconf.BadTypeInNameException:
+                logger.error("zero conf: bad type in name %s: %s -- ignoring the service announcement",cname,error.args)
+            if type(error) is zeroconf.NonUniqueNameException:
+                logger.error("zero conf: %s is already registered -- ignoring the service announcement",cname)
+            if type(error) is zeroconf.ServiceNameAlreadyRegistered:
+                logger.error("zero conf: service name %s is already registered -- ignoring the service announcement",cname)
 
     def unpublish(self,cname,port):
         """ unpublish the given cname """
