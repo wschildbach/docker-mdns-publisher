@@ -39,7 +39,7 @@ LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
 IP_VERSION = zeroconf.IPVersion.V4Only
 # The adapter(s) to listen on. If empty, will listen on all of them
 # we will listen and publish on all ip adresses of these adapters
-ADAPTERS = os.environ.get("ADAPTERS")
+ADAPTERS = os.environ.get("ADAPTERS","").split(',')
 # The networks that are excluded from publishing
 EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
@@ -85,14 +85,15 @@ class LocalHostWatcher():
         if IP_VERSION !=  zeroconf.IPVersion.V4Only:
             raise ValueError(f"IP_VERSION {IP_VERSION} not supported")
 
-        # check if all interface names actually exist
-        if "ADAPTERS" in os.environ:
-            ADAPTERS = os.environ.get("ADAPTERS").split(',')
+        # if no adapters were configured, use all interfaces
+        if ADAPTERS:
+            use_adapters = ADAPTERS
         else:
-            ADAPTERS = netifaces.interfaces()
-            logger.debug("publishing on all interfaces: %s", ADAPTERS)
+            use_adapters = netifaces.interfaces()
+            logger.debug("publishing on all interfaces: %s", use_adapters)
 
-        for a in ADAPTERS:
+        # check if all interface names actually exist
+        for a in use_adapters:
             try:
                 netifaces.ifaddresses(a)
             except ValueError as error:
