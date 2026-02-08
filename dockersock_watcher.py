@@ -17,17 +17,18 @@
    and registering/deregistering .local domain names when a label mdns.publish=host.local
    is present """
 
-__version__ = "0.10.5"
+__version__ = "1.0.0"
 
 import os
 import re
 import socket
 import logging
+from urllib.error import URLError
 import ifaddr
 import ipaddress
 import netifaces
-from urllib.error import URLError
-from zeroconf import IPVersion, ServiceInfo, Zeroconf
+import zeroconf
+
 import docker # pylint: disable=import-error
 
 # standard TTL is an hour
@@ -37,7 +38,7 @@ LOGGING_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 # get local domain from enviroment and escape all period characters
 LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
 # for now, hardcoded to IPv4 only
-IP_VERSION = IPVersion.V4Only
+IP_VERSION = zeroconf.IPVersion.V4Only
 # The adapter(s) to listen on. If empty, will listen on all of them
 # we will listen and publish on all ip adresses of these adapters
 ADAPTERS = os.environ.get("ADAPTERS")
@@ -80,7 +81,7 @@ class LocalHostWatcher():
 
         logger.debug("LocalHostWatcher.__init__()")
 
-        if IP_VERSION != IPVersion.V4Only:
+        if IP_VERSION !=  zeroconf.IPVersion.V4Only:
             raise exception("IP_VERSION %s not supported",IP_VERSION)
 
         # check if all interface names actually exist
@@ -108,7 +109,7 @@ class LocalHostWatcher():
 
         try:
             self.dockerclient = dockerclient
-            self.zeroconf = Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
+            self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
 
         except Exception as exception:
             # we don't really know which errors to expect here so we catch them all and re-throw
@@ -125,7 +126,7 @@ class LocalHostWatcher():
     def mkinfo(self,cname,serviceType="_http._tcp.local."):
         self.hostIndex += 1
 
-        return ServiceInfo(
+        return zeroconf.ServiceInfo(
             serviceType,
             f"host{self.hostIndex}.{serviceType}",
             addresses=self.interfaces,
@@ -146,7 +147,10 @@ class LocalHostWatcher():
         try:
             info = self.mkinfo(cname)
             self.zeroconf.register_service(info)
-        except BadTypeInNameException as error:
+        except (
+                zeroconf.BadTypeInNameException,
+                zeroconf.NonUniqueNameException,
+                zeroconf.ServiceNameAlreadyRegistered) as error:
                 logger.error("%s",error)
                 logger.warning("ignoring the service announcement for %s",cname)
 
