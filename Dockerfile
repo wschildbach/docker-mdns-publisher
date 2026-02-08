@@ -19,7 +19,7 @@ RUN python3 -m venv /helper && \
 	  /helper/bin/pip install zeroconf && \
 	  /helper/bin/pip install netifaces
 
-COPY dockersock_watcher.py /helper
+COPY dockersock_watcher.py utils.py /helper
 
 # in the runner stage, we have to run as root unfortunately, for access to the docker socket
 FROM python:3-slim AS runner
