@@ -21,7 +21,7 @@ RUN python3 -m venv /helper && \
 
 COPY dockersock_watcher.py /helper
 
-# in the runner stage, we have to run as root unfortunately, for access to the docker socket and to dbus
+# in the runner stage, we have to run as root unfortunately, for access to the docker socket
 FROM python:3-slim AS runner
 
 LABEL org.opencontainers.image.source=https://github.com/wschildbach/docker-mdns-publisher
