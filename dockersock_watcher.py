@@ -39,7 +39,9 @@ LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
 IP_VERSION = zeroconf.IPVersion.V4Only
 # The adapter(s) to listen on. If empty, will listen on all of them
 # we will listen and publish on all ip adresses of these adapters
-ADAPTERS = os.environ.get("ADAPTERS","").split(',')
+ADAPTERS = os.environ.get("ADAPTERS")
+if ADAPTERS is not None:
+    ADAPTERS=ADAPTERS.split(',')
 # The networks that are excluded from publishing
 EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
@@ -104,7 +106,7 @@ class LocalHostWatcher():
 
         # determine all adresses from the listed adapters.
         # filter against exclusion list (to disallow docker networks, for example)
-        self.interfaces = adapter_ips(ADAPTERS)
+        self.interfaces = adapter_ips(use_adapters)
 
         logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
