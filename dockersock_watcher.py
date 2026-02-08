@@ -17,17 +17,19 @@
    and registering/deregistering .local domain names when a label mdns.publish=host.local
    is present """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import os
 import re
 import logging
 from urllib.error import URLError
-import ipaddress
+import signal
+
 import netifaces
 import zeroconf
+import docker
 
-import docker # pylint: disable=import-error
+from utils import adapter_ips
 
 # standard TTL is an hour
 PUBLISH_TTL = int(os.environ.get("TTL","3600"))
@@ -59,75 +61,65 @@ class LocalHostWatcher():
     hostnamerule = re.compile(r'^\s*[\w\-\.]+\s*$')
     localrule = re.compile(r'.+'+LOCAL_DOMAIN+r'\.?')
 
-    def __init__(self,dockerclient):
-        """set up the mdns registry"""
-
-        def adapter_ips(adapters):
-            """return a list of all suitable ip adresses.
-            Addresses are taken from non-local IPv4 addresses that do not belong to
-            any of the subnets configured in EXCLUDED_NETS"""
-
-            def has_ip_v4(a):
-                return netifaces.AF_INET in netifaces.ifaddresses(a)
-
-            def non_local(ip):
-                return "broadcast" in ip
-
-            def in_excluded_networks(ip,nets):
-                return any(ipaddress.ip_address(ip) in n for n in nets)
-
-            excluded_nets = list(ipaddress.ip_network(n)
-                                 for n in EXCLUDED_NETS.split(",") if n != "")
-
-            return list(ip["addr"]
-                  for a in adapters if has_ip_v4(a)
-                  for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
-                  if non_local(ip) and not in_excluded_networks(ip["addr"],excluded_nets))
-
-        logger.debug("LocalHostWatcher.__init__()")
-
-        if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-            raise ValueError(f"IP_VERSION {IP_VERSION} not supported")
-
-        # if no adapters were configured, use all interfaces
-        if ADAPTERS:
-            use_adapters = ADAPTERS
-        else:
-            use_adapters = netifaces.interfaces()
-            logger.debug("publishing on all interfaces: %s", use_adapters)
-
-        # check if all interface names actually exist
-        for a in use_adapters:
-            try:
-                netifaces.ifaddresses(a)
-            except ValueError as error:
-                logger.critical('invalid adapter/interface name "%s": %s',a,error)
-                raise error # and re-raise the error
-
-        # determine all adresses from the listed adapters.
-        # filter against exclusion list (to disallow docker networks, for example)
-        self.interfaces = adapter_ips(use_adapters)
-
-        logger.debug("publishing on interfaces IPs: %s", self.interfaces)
-
-        # to make unique service instance names host1, host2, ....
-        self.host_index = 0
-
+    # ContextManager entry
+    def __enter__(self):
         try:
-            self.dockerclient = dockerclient
-            self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
+            if IP_VERSION !=  zeroconf.IPVersion.V4Only:
+                raise ValueError(f"IP_VERSION {IP_VERSION} not supported")
+
+            # if no adapters were configured, use all interfaces
+            if ADAPTERS:
+                use_adapters = ADAPTERS
+            else:
+                use_adapters = netifaces.interfaces()
+                logger.debug("publishing on all interfaces: %s", use_adapters)
+
+            # determine all adresses from the listed adapters.
+            # filter against exclusion list (to disallow docker networks, for example)
+            # check if all interface names actually exist
+            for a in use_adapters:
+                try:
+                    netifaces.ifaddresses(a)
+                except ValueError as error:
+                    logger.critical('invalid adapter/interface name "%s": %s',a,error)
+                    raise error # and re-raise the error
+
+                self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
+                logger.debug("publishing on interfaces IPs: %s", self.interfaces)
+
+                self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
+                # when in error, raise ResourceError("avahi daemon not available")
 
         except Exception as exception:
             # we don't really know which errors to expect here so we catch them all and re-throw
-            logger.critical("%s",exception.args)
+            logger.critical("%s",exception)
             raise exception
 
-    def __del__(self):
-        logger.info("deregistering all registered hostnames")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Handle exceptions (if any)
+        if exc_type:
+            logger.debug("A %s occurred: %s",exc_type,exc_value)
 
         if hasattr(self,"zeroconf"):
+            logger.info("deregistering all registered hostnames")
             self.zeroconf.close()
             del self.zeroconf # not strictly necessary but safe
+
+        return True  # Suppress exceptions
+
+    def __init__(self,dockerclient):
+        """set up the mdns registry"""
+
+        # to make unique service instance names host1, host2, ....
+        self.host_index = 0
+        self.dockerclient = dockerclient
+        self.interfaces = None
+        self.zeroconf = None
+
+    def __del__(self):
+        pass
 
     def mkinfo(self,cname,port,service_type="_http._tcp.local.",props=None):
         """fill out the zeroconf ServiceInfo structure"""
@@ -247,11 +239,18 @@ class LocalHostWatcher():
         for event in events:
             self.process_event(event)
 
+def handle_signals(signum, frame): # pylint: disable=unused-argument
+    """ does nothing except output a diagnostic message """
+
+    signame = signal.Signals(signum).name
+    logger.debug("Cleaning up on %s (%s)", signame, signum)
+
+    raise KeyboardInterrupt()
+
 if __name__ == '__main__':
     logger.info("docker-mdns-publisher daemon v%s starting.", __version__)
 
-    LOCAL_WATCHER = LocalHostWatcher(docker.from_env())
-    LOCAL_WATCHER.run() # this will never return
-
-    # we should never get here because run() loops indefinitely
-    assert False, "executing unreachable code"
+    with LocalHostWatcher(docker.from_env()) as LOCAL_WATCHER:
+        signal.signal(signal.SIGTERM, handle_signals)
+        signal.signal(signal.SIGINT,  handle_signals)
+        LOCAL_WATCHER.run() # this will return only if interrupted
