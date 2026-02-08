@@ -85,7 +85,7 @@ class LocalHostWatcher():
         logger.debug("LocalHostWatcher.__init__()")
 
         if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-            raise exception("IP_VERSION %s not supported",IP_VERSION)
+            raise ValueError(f"IP_VERSION {IP_VERSION} not supported")
 
         # check if all interface names actually exist
         if "ADAPTERS" in os.environ:
