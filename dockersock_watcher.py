@@ -243,8 +243,8 @@ class LocalHostWatcher():
 if __name__ == '__main__':
     logger.info("docker-mdns-publisher daemon v%s starting.", __version__)
 
-    localWatcher = LocalHostWatcher(docker.from_env())
-    localWatcher.run() # this will never return
+    LOCAL_WATCHER = LocalHostWatcher(docker.from_env())
+    LOCAL_WATCHER.run() # this will never return
 
     # we should never get here because run() loops indefinitely
     assert False, "executing unreachable code"
