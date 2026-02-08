@@ -21,10 +21,8 @@ __version__ = "1.0.0"
 
 import os
 import re
-import socket
 import logging
 from urllib.error import URLError
-import ifaddr
 import ipaddress
 import netifaces
 import zeroconf
@@ -126,7 +124,12 @@ class LocalHostWatcher():
             self.zeroconf.close()
             del self.zeroconf # not strictly necessary but safe
 
-    def mkinfo(self,cname,port,service_type="_http._tcp.local.",props={}):
+    def mkinfo(self,cname,port,service_type="_http._tcp.local.",props=None):
+        """fill out the zeroconf ServiceInfo structure"""
+
+        if props is None:
+            props = {}
+
         self.host_index += 1
 
         return zeroconf.ServiceInfo(
@@ -156,11 +159,11 @@ class LocalHostWatcher():
                 zeroconf.NonUniqueNameException,
                 zeroconf.ServiceNameAlreadyRegistered) as error:
 
-            if type(error) is zeroconf.BadTypeInNameException:
+            if isinstance(error, zeroconf.BadTypeInNameException):
                 logger.error("zero conf: bad type in name %s: %s -- ignoring the service announcement",cname,error.args)
-            if type(error) is zeroconf.NonUniqueNameException:
+            if isinstance(error, zeroconf.NonUniqueNameException):
                 logger.error("zero conf: %s is already registered -- ignoring the service announcement",cname)
-            if type(error) is zeroconf.ServiceNameAlreadyRegistered:
+            if isinstance(error, zeroconf.ServiceNameAlreadyRegistered):
                 logger.error("zero conf: service name %s is already registered -- ignoring the service announcement",cname)
 
     def unpublish(self,cname,port):
