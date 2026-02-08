@@ -1,3 +1,4 @@
+""" Utility functions for network adapter and address discovery """
 import ipaddress
 import netifaces
 
@@ -5,7 +6,7 @@ def adapter_ips(adapters, excluded_nets):
     """return a list of all suitable ip adresses.
          Addresses are taken from non-local IPv4 addresses that do not belong to
          any of the subnets configured in excluded_nets"""
-    
+
     def has_ip_v4(a):
         return netifaces.AF_INET in netifaces.ifaddresses(a)
 
