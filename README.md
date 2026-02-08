@@ -60,14 +60,15 @@ docker-mdns-publisher-1  | INFO:docker-mdns-publisher:publishing test1.local
 
 In your service compose file definition, add a label `mdns.publish=myhost.local` and restart your
 service/container (replace `myhost` with whatever DNS name you want to give your service). The
-daemon then publishes `myhost.local` through avahi, using the local interface adresses.
-
-More than one comma-separated names can be given in the label.
-
+daemon then publishes `myhost.local` through mdns, using the interfaces configured above.
 When the container is stopped, the host is unpublished. Depending on the TTL, it may take some
 time until the change becomes effective.
 
-If you are using traefik, then more than one service can be hosted behind the same port.
+More than one comma-separated names can be given in the label. If the port is not the standard port, 
+
+Additionally, you can change the default port by using `host:port` notation.
+
+Finally, txt records can be added by using a `mdns.txt=key1=value1,key2=value2` notation.
 
 Obviously, you could also supply labels in the Dockerfile of your service, or on the command line, if that is more convenient.
 
@@ -79,22 +80,21 @@ services:
     image: alpine
     command: "sleep 15"
     labels:
-      - mdns.publish=test1.local
+      - mdns.publish=test1.local,test2.local:8080
+      - mdns.txt=version=1,path=/home/bin/test.exe
 ```
 
 ## Development and debugging
 
 To enable debugging on the daemon, set the `LOG_LEVEL` environment variable.
 `LOG_LEVEL` must be set to one of the [standard python log levels](https://docs.python.org/3/library/logging.html#logging-levels).
+TRACING enables debug output for the zeroconf library in addition.
 You can set this in the compose.yml file:
 
 ```
     environment:
       - LOG_LEVEL=DEBUG
 ```
-
-If the machine which you develop on does not have an avahi daemon, or you don't want any mDNS publication during development,
-set `USE_AVAHI=NO` for the daemon.
 
 The compose.yml file provides a few test services which register themselves. Start the daemon using
 `docker compose --profile debug up` and the test services will start up together with the daemon.
