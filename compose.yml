@@ -4,7 +4,6 @@ services:
     build: .
     read_only: true
     restart: on-failure:10
-    privileged: true
     environment:
       - LOG_LEVEL=INFO # INFO is the default
       - PYTHONUNBUFFERED=1
