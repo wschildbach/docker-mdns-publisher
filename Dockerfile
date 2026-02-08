@@ -40,3 +40,5 @@ RUN mkdir /helper
 COPY --from=build-stage /helper /helper
 
 CMD ["/helper/bin/python3","/helper/dockersock_watcher.py"]
+
+EXPOSE 5353/udp
