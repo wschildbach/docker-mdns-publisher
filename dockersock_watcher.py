@@ -47,6 +47,9 @@ EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 logger = logging.getLogger("docker-mdns-publisher")
 logging.basicConfig(level=LOGGING_LEVEL)
 
+if LOGGING_LEVEL=="TRACE":
+    logging.getLogger("zeroconf").setLevel(logging.DEBUG)
+
 class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
     Publish and unpublish mDNS records."""
