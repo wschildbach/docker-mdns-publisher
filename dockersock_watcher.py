@@ -67,7 +67,7 @@ class LocalHostWatcher():
             Addresses are taken from non-local IPv4 addresses that do not belong to
             any of the subnets configured in EXCLUDED_NETS"""
 
-            def has_IPv4(a):
+            def has_ip_v4(a):
                 return netifaces.AF_INET in netifaces.ifaddresses(a)
 
             def non_local(ip):
@@ -78,7 +78,7 @@ class LocalHostWatcher():
 
             excluded_nets = list(ipaddress.ip_network(n) for n in EXCLUDED_NETS.split(",") if n != "")
             return list(ip["addr"]
-                  for a in adapters if has_IPv4(a)
+                  for a in adapters if has_ip_v4(a)
                   for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
                   if non_local(ip) and not in_excluded_networks(ip["addr"],excluded_nets))
 
@@ -108,7 +108,7 @@ class LocalHostWatcher():
         logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
         # to make unique service instance names host1, host2, ....
-        self.hostIndex = 0
+        self.host_index = 0
 
         try:
             self.dockerclient = dockerclient
@@ -126,12 +126,12 @@ class LocalHostWatcher():
             self.zeroconf.close()
             del self.zeroconf # not strictly necessary but safe
 
-    def mkinfo(self,cname,port,serviceType="_http._tcp.local.",props={}):
-        self.hostIndex += 1
+    def mkinfo(self,cname,port,service_type="_http._tcp.local.",props={}):
+        self.host_index += 1
 
         return zeroconf.ServiceInfo(
-            serviceType,
-            f"host{self.hostIndex}.{serviceType}",
+            service_type,
+            f"host{self.host_index}.{service_type}",
             addresses=self.interfaces,
             port=port,
             host_ttl=PUBLISH_TTL,
