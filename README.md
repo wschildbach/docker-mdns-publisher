@@ -64,9 +64,9 @@ daemon then publishes `myhost.local` through mdns, using the interfaces configur
 When the container is stopped, the host is unpublished. Depending on the TTL, it may take some
 time until the change becomes effective.
 
-More than one comma-separated names can be given in the label. If the port is not the standard port, 
+Additionally, you can change the default port by using `host:port` notation. The default port is 80.
 
-Additionally, you can change the default port by using `host:port` notation.
+The service type is set according to the port, but can be overridden using the mdns.servicetype label.
 
 Finally, txt records can be added by using a `mdns.txt=key1=value1,key2=value2` notation.
 
@@ -80,7 +80,8 @@ services:
     image: alpine
     command: "sleep 15"
     labels:
-      - mdns.publish=test1.local,test2.local:8080
+      - mdns.publish=test2.local:80
+      - mdns.servicetype=_http._tcp
       - mdns.txt=version=1,path=/home/bin/test.exe
 ```
 

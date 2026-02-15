@@ -30,6 +30,7 @@ import zeroconf
 import docker
 
 from utils import adapter_ips
+from utils import well_known_port_name
 
 # standard TTL is an hour
 PUBLISH_TTL = int(os.environ.get("TTL","3600"))
@@ -113,13 +114,18 @@ class LocalHostWatcher():
     def __del__(self):
         pass
 
-    def mkinfo(self,cname,port,service_type="_http._tcp.local.",props=None):
+    def mkinfo(self,cname,port,service_type=None,props=None):
         """fill out the zeroconf ServiceInfo structure"""
 
-        if props is None:
-            props = {}
+        props = props or {}
 
         self.host_index += 1
+
+        if service_type is None:
+            try:
+                service_type = well_known_port_name[port] + ".local."
+            except KeyError as e:
+                raise ValueError("supply a service type with this port") from e
 
         return zeroconf.ServiceInfo(
             service_type,
@@ -131,9 +137,8 @@ class LocalHostWatcher():
             properties=props
         )
 
-    def publish(self,cname,port,props):
+    def publish(self,cname,port,servicetype,props=None):
         """ publish the given cname """
-        props = props or {}
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
@@ -141,7 +146,7 @@ class LocalHostWatcher():
 
         logger.info("publishing %s:%d",cname,port)
 
-        info = self.mkinfo(cname,port,props=props)
+        info = self.mkinfo(cname,port,servicetype,props=props)
         self.zeroconf.register_service(info, allow_name_change=False)
         return info
 
@@ -174,6 +179,7 @@ class LocalHostWatcher():
              registers or deregisters it"""
 
         hosts = container.labels.get("mdns.publish")
+        service_type = container.labels.get("mdns.servicetype")
         txt = container.labels.get("mdns.txt")
         if txt is not None:
             txt = dict([tuple(t.split('=')) for t in txt.split(',')])
@@ -195,7 +201,7 @@ class LocalHostWatcher():
                 # if the cname looks valid, either register or deregister it
                 if action == 'start':
                     try:
-                        self.publish(cname,port,props=txt)
+                        self.publish(cname,port,service_type,props=txt)
                     except zeroconf.BadTypeInNameException as error:
                         logger.error("zero conf: bad type in name %s: %s \
                            -- ignoring the service announcement",cname,error.args)
