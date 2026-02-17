@@ -24,4 +24,4 @@ jobs:
         pylint $(git ls-files '*.py')
     - name: Running unit tests
       run: |
-        python -m unittest mdns-unittest.py
+        python -m unittest mdns_unittest.py
