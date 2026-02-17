@@ -133,12 +133,13 @@ class LocalHostWatcher():
 
     def publish(self,cname,port,props):
         """ publish the given cname """
-        logger.info("publishing %s:%d",cname,port)
         props = props or {}
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
             cname += '.'
+
+        logger.info("publishing %s:%d",cname,port)
 
         info = self.mkinfo(cname,port,props=props)
         self.zeroconf.register_service(info, allow_name_change=False)
