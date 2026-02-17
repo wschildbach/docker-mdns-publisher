@@ -63,37 +63,29 @@ class LocalHostWatcher():
 
     # ContextManager entry
     def __enter__(self):
-        try:
-            if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-                raise ValueError(f"IP_VERSION {IP_VERSION} not supported")
+        if IP_VERSION !=  zeroconf.IPVersion.V4Only:
+            raise RunTimeError(f"IP_VERSION {IP_VERSION} not supported")
 
-            # if no adapters were configured, use all interfaces
-            if ADAPTERS:
-                use_adapters = ADAPTERS
-            else:
-                use_adapters = netifaces.interfaces()
-                logger.debug("publishing on all interfaces: %s", use_adapters)
+        # if no adapters were configured, use all interfaces
+        if ADAPTERS:
+            use_adapters = ADAPTERS
+        else:
+            use_adapters = netifaces.interfaces()
+            logger.debug("publishing on all interfaces: %s", use_adapters)
 
-            # determine all adresses from the listed adapters.
-            # filter against exclusion list (to disallow docker networks, for example)
-            # check if all interface names actually exist
-            for a in use_adapters:
-                try:
-                    netifaces.ifaddresses(a)
-                except ValueError as error:
-                    logger.critical('invalid adapter/interface name "%s": %s',a,error)
-                    raise error # and re-raise the error
+        # determine all adresses from the listed adapters.
+        # filter against exclusion list (to disallow docker networks, for example)
+        # check if all interface names actually exist
+        for a in use_adapters:
+            try:
+                netifaces.ifaddresses(a)
+            except ValueError as error:
+                raise ValueError('invalid adapter/interface name "%s": %s',a) from error
 
-                self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
-                logger.debug("publishing on interfaces IPs: %s", self.interfaces)
+            self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
+            logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
-                self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
-                self.zeroconf.start()
-
-        except Exception as exception:
-            # we don't really know which errors to expect here so we catch them all and re-throw
-            logger.critical("%s",exception)
-            raise exception
+            self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
 
         return self
 
@@ -141,28 +133,25 @@ class LocalHostWatcher():
 
     def publish(self,cname,port,props):
         """ publish the given cname """
-        logger.info("publishing %s:%d",cname,port)
         props = props or {}
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
             cname += '.'
 
-        try:
-            info = self.mkinfo(cname,port,props=props)
-            self.zeroconf.register_service(info)
-        except zeroconf.BadTypeInNameException as error:
-            logger.error("zero conf: bad type in name %s: %s \
-                                 -- ignoring the service announcement",cname,error.args)
-        except zeroconf.NonUniqueNameException:
-            logger.error("zero conf: %s is already registered \
-                                 -- ignoring the service announcement",cname)
-        except zeroconf.ServiceNameAlreadyRegistered:
-            logger.error("zero conf: service name %s is already registered \
-                                 -- ignoring the service announcement",cname)
+        logger.info("publishing %s:%d",cname,port)
+
+        info = self.mkinfo(cname,port,props=props)
+        self.zeroconf.register_service(info, allow_name_change=False)
+        return info
 
     def unpublish(self,cname,port):
         """ unpublish the given cname """
+
+        # the FQDN needs to end with a dot. Supply one to be user friendly
+        if not cname.endswith('.'):
+            cname += '.'
+
         logger.info("unpublishing %s:%d",cname,port)
         info = self.mkinfo(cname,port)
         self.zeroconf.unregister_service(info)
@@ -207,13 +196,17 @@ class LocalHostWatcher():
                 if action == 'start':
                     try:
                         self.publish(cname,port,props=txt)
-                    except KeyError:
-                        logger.warning("registering previously registered %s",cname)
+                    except zeroconf.BadTypeInNameException as error:
+                        logger.error("zero conf: bad type in name %s: %s \
+                                              -- ignoring the service announcement",cname,error.args)
+                    except zeroconf.NonUniqueNameException:
+                        logger.error("zero conf: %s is already registered \
+                                              -- ignoring the service announcement",cname)
+                    except zeroconf.ServiceNameAlreadyRegistered:
+                        logger.error("zero conf: service name %s is already registered \
+                                              -- ignoring the service announcement",cname)
                 elif action == 'die':
-                    try:
-                        self.unpublish(cname,port)
-                    except KeyError:
-                        logger.warning("unregistering previously unregistered %s",cname)
+                    self.unpublish(cname,port)
 
     def run(self):
         """Initial scan of running containers and publish hostnames.
@@ -245,7 +238,11 @@ def handle_signals(signum, frame): # pylint: disable=unused-argument
 if __name__ == '__main__':
     logger.info("docker-mdns-publisher daemon v%s starting.", __version__)
 
-    with LocalHostWatcher(docker.from_env()) as LOCAL_WATCHER:
-        signal.signal(signal.SIGTERM, handle_signals)
-        signal.signal(signal.SIGINT,  handle_signals)
-        LOCAL_WATCHER.run() # this will return only if interrupted
+    try:
+        with LocalHostWatcher(docker.from_env()) as LOCAL_WATCHER:
+            signal.signal(signal.SIGTERM, handle_signals)
+            signal.signal(signal.SIGINT,  handle_signals)
+            LOCAL_WATCHER.run() # this will return only if interrupted
+    except Exception as exception:
+        # we don't really know which errors to expect here so we catch them all
+        logger.critical("%s",exception)
