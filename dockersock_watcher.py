@@ -64,7 +64,7 @@ class LocalHostWatcher():
     # ContextManager entry
     def __enter__(self):
         if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-            raise RunTimeError(f"IP_VERSION {IP_VERSION} not supported")
+            raise NotImplementedError(f"IP_VERSION {IP_VERSION} not supported")
 
         # if no adapters were configured, use all interfaces
         if ADAPTERS:
@@ -80,7 +80,7 @@ class LocalHostWatcher():
             try:
                 netifaces.ifaddresses(a)
             except ValueError as error:
-                raise ValueError('invalid adapter/interface name "%s": %s',a) from error
+                raise ValueError(f'invalid adapter/interface name "{a}": {error}') from error
 
             self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
             logger.debug("publishing on interfaces IPs: %s", self.interfaces)
@@ -198,7 +198,7 @@ class LocalHostWatcher():
                         self.publish(cname,port,props=txt)
                     except zeroconf.BadTypeInNameException as error:
                         logger.error("zero conf: bad type in name %s: %s \
-                                              -- ignoring the service announcement",cname,error.args)
+                           -- ignoring the service announcement",cname,error.args)
                     except zeroconf.NonUniqueNameException:
                         logger.error("zero conf: %s is already registered \
                                               -- ignoring the service announcement",cname)
@@ -243,6 +243,6 @@ if __name__ == '__main__':
             signal.signal(signal.SIGTERM, handle_signals)
             signal.signal(signal.SIGINT,  handle_signals)
             LOCAL_WATCHER.run() # this will return only if interrupted
-    except Exception as exception:
+    except Exception as exception: # pylint: disable=broad-exception-caught
         # we don't really know which errors to expect here so we catch them all
         logger.critical("%s",exception)
