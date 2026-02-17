@@ -151,20 +151,15 @@ class LocalHostWatcher():
         try:
             info = self.mkinfo(cname,port,props=props)
             self.zeroconf.register_service(info)
-        except (
-                zeroconf.BadTypeInNameException,
-                zeroconf.NonUniqueNameException,
-                zeroconf.ServiceNameAlreadyRegistered) as error:
-
-            if isinstance(error, zeroconf.BadTypeInNameException):
-                logger.error("zero conf: bad type in name %s: %s \
-                                        -- ignoring the service announcement",cname,error.args)
-            if isinstance(error, zeroconf.NonUniqueNameException):
-                logger.error("zero conf: %s is already registered \
-                                       -- ignoring the service announcement",cname)
-            if isinstance(error, zeroconf.ServiceNameAlreadyRegistered):
-                logger.error("zero conf: service name %s is already registered \
-                                        -- ignoring the service announcement",cname)
+        except zeroconf.BadTypeInNameException as error:
+            logger.error("zero conf: bad type in name %s: %s \
+                                 -- ignoring the service announcement",cname,error.args)
+        except zeroconf.NonUniqueNameException:
+            logger.error("zero conf: %s is already registered \
+                                 -- ignoring the service announcement",cname)
+        except zeroconf.ServiceNameAlreadyRegistered:
+            logger.error("zero conf: service name %s is already registered \
+                                 -- ignoring the service announcement",cname)
 
     def unpublish(self,cname,port):
         """ unpublish the given cname """
