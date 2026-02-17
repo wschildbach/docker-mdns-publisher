@@ -88,7 +88,7 @@ class LocalHostWatcher():
                 logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
                 self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
-                # when in error, raise ResourceError("avahi daemon not available")
+                self.zeroconf.start()
 
         except Exception as exception:
             # we don't really know which errors to expect here so we catch them all and re-throw
@@ -103,7 +103,7 @@ class LocalHostWatcher():
             logger.debug("A %s occurred: %s",exc_type,exc_value)
 
         if hasattr(self,"zeroconf"):
-            logger.info("deregistering all registered hostnames")
+            logger.debug("deregistering all registered hostnames")
             self.zeroconf.close()
             del self.zeroconf # not strictly necessary but safe
 
