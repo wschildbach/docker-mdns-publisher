@@ -147,6 +147,11 @@ class LocalHostWatcher():
 
     def unpublish(self,cname,port):
         """ unpublish the given cname """
+
+        # the FQDN needs to end with a dot. Supply one to be user friendly
+        if not cname.endswith('.'):
+            cname += '.'
+
         logger.info("unpublishing %s:%d",cname,port)
         info = self.mkinfo(cname,port)
         self.zeroconf.unregister_service(info)
