@@ -23,6 +23,7 @@ import os
 import logging
 from urllib.error import URLError
 import signal
+import datetime
 from dataclasses import dataclass
 
 import netifaces
@@ -201,6 +202,9 @@ class LocalHostWatcher():
 
         # parse txt records
         txt = make_dict(container.labels.get("mdns.txt",""))
+        if self.config.log_level=="DEBUG":
+            txt["container_id"]=container_id
+            txt["publish_date"]=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M %Z')
 
         if hosts is not None:
             for cname in hosts.split(','):
