@@ -119,9 +119,11 @@ class TestRegistration(unittest.TestCase):
         """Supply an unknown port together with a service"""
 
         with self.assertLogs():
-            with self.assertNotRaises(ValueError):
-                si = self._lhw.publish("foo.local",6789,"_http._tcp")
-                self._lhw.unpublish(si)
+            si = self._lhw.publish("foo.local",6789,"_http._tcp")
+            self._lhw.unpublish(si)
+
+        self.assertEqual(si.port, 6789)
+        self.assertEqual(si.type,"_http._tcp.local.")
 
 if __name__ == '__main__':
     unittest.main()
