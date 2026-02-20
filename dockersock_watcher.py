@@ -182,11 +182,25 @@ class LocalHostWatcher():
              Checks whether the container has a label "mdns.publish" and if so, either
              registers or deregisters it"""
 
+        def make_dict(s):
+            """transform mdns.txt string into a dict"""
+            a = []
+            for t in s.split(','):
+                if t.strip():
+                    if '=' in t:
+                        a.append( tuple(t.split('=')) )
+                    else:
+                        a.append( (t,'') )
+            return dict(a)
+
+        # parse host/service instance name
         hosts = container.labels.get("mdns.publish")
+
+        # retrieve servicetype, if provided
         service_type = container.labels.get("mdns.servicetype")
-        txt = container.labels.get("mdns.txt")
-        if txt is not None:
-            txt = dict([tuple(t.split('=')) for t in txt.split(',')])
+
+        # parse txt records
+        txt = make_dict(container.labels.get("mdns.txt",""))
 
         if hosts is not None:
             for cname in hosts.split(','):
