@@ -108,6 +108,16 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(si.port, 80)
         self.assertEqual(si.type,"_http._tcp.local.")
 
+    def test_known_port_raises_no_exception(self):
+        """A known port is supplied"""
+
+        with self.assertLogs():
+            si = self._lhw.publish("foo.local",1883)
+            self._lhw.unpublish(si)
+
+        self.assertEqual(si.port, 1883)
+        self.assertEqual(si.type,"_mqtt._tcp.local.")
+
     def test_unknown_port_raises_exception(self):
         """Expect a failure if an unknown port is supplied, but no explicit service"""
 
@@ -124,6 +134,24 @@ class TestRegistration(unittest.TestCase):
 
         self.assertEqual(si.port, 6789)
         self.assertEqual(si.type,"_http._tcp.local.")
+
+    def test_txt_record_kvpair(self):
+        """publish txt record with value"""
+
+        with self.assertLogs():
+            si = self._lhw.publish("foo.local",6789,"_http._tcp",{"i_am_a_kvpair":"yes"})
+            self._lhw.unpublish(si)
+
+        self.assertEqual(si.properties,{b'i_am_a_kvpair': b'yes'})
+
+    def test_txt_record_bool(self):
+        """publish txt record without value"""
+
+        with self.assertLogs():
+            si = self._lhw.publish("foo.local",6789,"_http._tcp",{"i_am_a_bool":None})
+            self._lhw.unpublish(si)
+
+        self.assertEqual(si.properties,{b'i_am_a_bool': None})
 
 if __name__ == '__main__':
     unittest.main()
