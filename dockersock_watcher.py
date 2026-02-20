@@ -24,6 +24,7 @@ import logging
 from urllib.error import URLError
 import signal
 import datetime
+import re
 from dataclasses import dataclass
 
 import netifaces
@@ -127,6 +128,30 @@ class LocalHostWatcher():
 
         props = props or {}
 
+        def is_valid_hostname(hostname):
+            """determine if a hostname is valid.
+
+            Originally found at https://stackoverflow.com/a/43211062, slightly modified.
+            Licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+            (c) by [Alexx Roche](https://stackoverflow.com/users/1153645/alexx-roche)
+            """
+
+            # convert unicode hostname to punycode (python 3 )
+            hostname = hostname.encode("idna").decode()
+
+            if len(hostname) > 255:
+                return False
+            hostname = hostname.rstrip(".")
+            allowed = re.compile(r"(?!-)[A-Z\d\-\_]{1,63}(?<!-)$", re.IGNORECASE)
+            return all(allowed.match(x) for x in hostname.split("."))
+
+        # the FQDN needs to end with a dot. Supply one to be user friendly
+        if not cname.endswith('.'):
+            cname += '.'
+
+        if not is_valid_hostname(cname):
+            raise IgnoredError(f"invalid server name {cname}")
+
         if not cname.endswith(".local."):
             raise IgnoredError("only .local domain is supported")
         cname = cname.removesuffix(".local.")
@@ -149,10 +174,6 @@ class LocalHostWatcher():
 
     def publish(self,cname,port,servicetype=None,props=None):
         """ publish the given record """
-
-        # the FQDN needs to end with a dot. Supply one to be user friendly
-        if not cname.endswith('.'):
-            cname += '.'
 
         logger.info("publishing %s:%d",cname,port)
 
