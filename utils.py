@@ -23,3 +23,12 @@ def adapter_ips(adapters, excluded_nets):
                 for a in adapters if has_ip_v4(a)
                 for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
                 if non_local(ip) and not in_excluded_networks(ip["addr"],excluded_nets))
+
+well_known_port_name = {
+    80: "_http._tcp",
+    443: "_http._tcp",
+    515: "_printer._tcp",
+    631: "_ipp._tcp",
+    9100: "_pdl-datastream._tcp",
+    1883: "_mqtt._tcp"
+}

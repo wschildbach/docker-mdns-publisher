@@ -17,61 +17,65 @@
    and registering/deregistering .local domain names when a label mdns.publish=host.local
    is present """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import os
-import re
 import logging
 from urllib.error import URLError
 import signal
+from dataclasses import dataclass
 
 import netifaces
 import zeroconf
 import docker
 
 from utils import adapter_ips
-
-# standard TTL is an hour
-PUBLISH_TTL = int(os.environ.get("TTL","3600"))
-# These are the standard python log levels
-LOGGING_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
-# get local domain from enviroment and escape all period characters
-LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
-# for now, hardcoded to IPv4 only
-IP_VERSION = zeroconf.IPVersion.V4Only
-# The adapter(s) to listen on. If empty, will listen on all of them
-# we will listen and publish on all ip adresses of these adapters
-ADAPTERS = os.environ.get("ADAPTERS")
-if ADAPTERS is not None:
-    ADAPTERS=ADAPTERS.split(',')
-# The networks that are excluded from publishing
-EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
+from utils import well_known_port_name
 
 logger = logging.getLogger("docker-mdns-publisher")
-logging.basicConfig(level=LOGGING_LEVEL)
 
-if LOGGING_LEVEL=="TRACE":
-    logging.getLogger("zeroconf").setLevel(logging.DEBUG)
+@dataclass
+class Configuration():
+    """data structure to configure LocalHostWatcher"""
+    def __init__(self):
+        """read environment"""
+
+        # The adapter(s) to listen on. If empty, will listen on all of them
+        # we will listen and publish on all ip adresses of these adapters
+        self.adapters = os.environ.get("ADAPTERS")
+        if self.adapters is not None:
+            self.adapters = self.adapters.split(',')
+
+        # standard TTL is an hour
+        self.publish_ttl = int(os.environ.get("TTL","3600"))
+
+        # for now, hardcoded to IPv4 only
+        self.ip_version = zeroconf.IPVersion.V4Only
+
+        # The networks that are excluded from publishing
+        self.excluded_nets = os.environ.get("EXCLUDED_NETS","")
+
+        # These are the standard python log levels
+        log_level = os.environ.get("LOG_LEVEL", "INFO")
+        if log_level=="TRACE":
+            logging.getLogger("zeroconf").setLevel(logging.DEBUG)
+            log_level = "DEBUG"
+
+        logging.basicConfig(level=log_level)
 
 class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
     Publish and unpublish mDNS records."""
 
-    # Set up compiler regexes to find sanitize labels
-    hostnamerule = re.compile(r'^\s*[\w\-\.]+\s*$')
-    localrule = re.compile(r'.+'+LOCAL_DOMAIN+r'\.?')
-
     # ContextManager entry
     def __enter__(self):
-        if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-            raise NotImplementedError(f"IP_VERSION {IP_VERSION} not supported")
+        if self.config.ip_version !=  zeroconf.IPVersion.V4Only:
+            raise NotImplementedError(f"IP_VERSION {self.config.ip_version} not supported")
 
         # if no adapters were configured, use all interfaces
-        if ADAPTERS:
-            use_adapters = ADAPTERS
-        else:
-            use_adapters = netifaces.interfaces()
-            logger.debug("publishing on all interfaces: %s", use_adapters)
+        use_adapters = self.config.adapters or netifaces.interfaces()
+        if not self.config.adapters:
+            logger.warning("publishing on all interfaces: %s", use_adapters)
 
         # determine all adresses from the listed adapters.
         # filter against exclusion list (to disallow docker networks, for example)
@@ -82,10 +86,12 @@ class LocalHostWatcher():
             except ValueError as error:
                 raise ValueError(f'invalid adapter/interface name "{a}": {error}') from error
 
-            self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
+            self.interfaces = adapter_ips(use_adapters, self.config.excluded_nets)
             logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
-            self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
+            self.zeroconf = zeroconf.Zeroconf(
+                ip_version=self.config.ip_version, interfaces=self.interfaces
+            )
 
         return self
 
@@ -104,36 +110,44 @@ class LocalHostWatcher():
     def __init__(self,dockerclient):
         """set up the mdns registry"""
 
-        # to make unique service instance names host1, host2, ....
-        self.host_index = 0
-        self.dockerclient = dockerclient
-        self.interfaces = None
-        self.zeroconf = None
+        # set our configuration from environment variables
+        self.config = Configuration()
+
+        self.dockerclient = dockerclient # so we know what to listen for
+        self.interfaces = None # the interfaces that we advertise on
+        self.zeroconf = None # the zeroconf instance
+        self.info_store = {} # stores info structures, indexed by container id
 
     def __del__(self):
         pass
 
-    def mkinfo(self,cname,port,service_type="_http._tcp.local.",props=None):
+    def mkinfo(self,cname,port,service_type=None,props=None):
         """fill out the zeroconf ServiceInfo structure"""
 
-        if props is None:
-            props = {}
+        props = props or {}
 
-        self.host_index += 1
+        if not cname.endswith(".local."):
+            raise ValueError("only .local domain is supported")
+        cname = cname.removesuffix(".local.")
+
+        if service_type is None:
+            try:
+                service_type = well_known_port_name[port]
+            except KeyError as e:
+                raise ValueError("supply a service type with this port") from e
 
         return zeroconf.ServiceInfo(
-            service_type,
-            f"host{self.host_index}.{service_type}",
+            f"{service_type}.local.", # fully qualified service type
+            f"{cname}.{service_type}.local.", # fully qualified service type name
             addresses=self.interfaces,
             port=port,
-            host_ttl=PUBLISH_TTL,
-            server = cname,
+            host_ttl=self.config.publish_ttl,
+            server = f"{cname}.local.",
             properties=props
         )
 
-    def publish(self,cname,port,props):
-        """ publish the given cname """
-        props = props or {}
+    def publish(self,cname,port,servicetype=None,props=None):
+        """ publish the given record """
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
@@ -141,19 +155,14 @@ class LocalHostWatcher():
 
         logger.info("publishing %s:%d",cname,port)
 
-        info = self.mkinfo(cname,port,props=props)
+        info = self.mkinfo(cname,port,servicetype,props=props)
         self.zeroconf.register_service(info, allow_name_change=False)
         return info
 
-    def unpublish(self,cname,port):
-        """ unpublish the given cname """
+    def unpublish(self,info):
+        """ unpublish the given record """
 
-        # the FQDN needs to end with a dot. Supply one to be user friendly
-        if not cname.endswith('.'):
-            cname += '.'
-
-        logger.info("unpublishing %s:%d",cname,port)
-        info = self.mkinfo(cname,port)
+        logger.info("unpublishing %s:%d",info.name,info.port)
         self.zeroconf.unregister_service(info)
 
     def process_event(self,event):
@@ -162,40 +171,41 @@ class LocalHostWatcher():
             container_id = event['Actor']['ID']
             try:
                 container = self.dockerclient.containers.get(container_id)
-                self.process_container(event['Action'],container)
+                self.process_container(container_id,container,event['Action'])
             except URLError as error:
                 # in some cases, containers may have already gone away when we process the event.
                 # consider this harmless but log an error
                 logger.warning("%s",error)
 
-    def process_container(self,action,container):
+    def process_container(self,container_id,container,action):
         """Run when a container triggered start/stop event.
              Checks whether the container has a label "mdns.publish" and if so, either
              registers or deregisters it"""
 
         hosts = container.labels.get("mdns.publish")
+        service_type = container.labels.get("mdns.servicetype")
         txt = container.labels.get("mdns.txt")
         if txt is not None:
             txt = dict([tuple(t.split('=')) for t in txt.split(',')])
 
         if hosts is not None:
             for cname in hosts.split(','):
-                # these may not be necessary. python-zeroconf does pretty throrough checking.
+                # detect if specific port is being advertised
                 port = 80
                 if ":" in cname:
                     cname,port = cname.split(':')
                     port=int(port)
-                if not self.localrule.match(cname):
-                    logger.error("cannot register non-local hostname %s; rejected", cname)
-                    continue
-                if not self.hostnamerule.match(cname):
-                    logger.error("invalid hostname %s; rejected", cname)
-                    continue
 
-                # if the cname looks valid, either register or deregister it
+                # either register or deregister the name
                 if action == 'start':
                     try:
-                        self.publish(cname,port,props=txt)
+                        if container_id in self.info_store:
+                            logger.error("trying to register more than one service (%s) \
+                               for container %s",cname,container_id)
+                        else:
+                            self.info_store[container_id] = self.publish(
+                                cname,port,service_type,props=txt
+                            )
                     except zeroconf.BadTypeInNameException as error:
                         logger.error("zero conf: bad type in name %s: %s \
                            -- ignoring the service announcement",cname,error.args)
@@ -206,7 +216,12 @@ class LocalHostWatcher():
                         logger.error("zero conf: service name %s is already registered \
                                               -- ignoring the service announcement",cname)
                 elif action == 'die':
-                    self.unpublish(cname,port)
+                    try:
+                        # if the service never was registered, this raises a KeyError
+                        self.unpublish(self.info_store.pop(container_id))
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # catch any and all exceptions here -- we want to never fail
+                        pass
 
     def run(self):
         """Initial scan of running containers and publish hostnames.
@@ -219,7 +234,7 @@ class LocalHostWatcher():
         logger.debug("registering running containers...")
         containers = self.dockerclient.containers.list(filters={"label":"mdns.publish"})
         for container in containers:
-            self.process_container("start", container)
+            self.process_container(container.id, container, "start")
 
         # now listen for Docker events and process them. We may double-process containers that
         # started during the initial iteration, but that is OK.
