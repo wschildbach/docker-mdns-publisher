@@ -23,7 +23,6 @@ import os
 import logging
 from urllib.error import URLError
 import signal
-import datetime
 import re
 from dataclasses import dataclass
 
@@ -32,7 +31,7 @@ import zeroconf
 import docker
 
 from utils import adapter_ips
-from utils import well_known_port_name, IgnoredError, FatalError
+from utils import well_known_port_name, utcnow, IgnoredError, FatalError
 
 logger = logging.getLogger("docker-mdns-publisher")
 
@@ -232,7 +231,7 @@ class LocalHostWatcher():
         txt = make_dict(container.labels.get("mdns.txt",""))
         if self.config.log_level=="DEBUG":
             txt["container_id"]=container_id
-            txt["publish_date"]=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M %Z')
+            txt["publish_date"]=utcnow().strftime('%Y-%m-%d %H:%M %Z')
 
         if hosts is not None:
             for cname in hosts.split(','):

@@ -1,5 +1,7 @@
 """ Utility functions for network adapter and address discovery """
 import ipaddress
+import sys
+from datetime import datetime, timezone
 import netifaces
 import zeroconf
 
@@ -24,6 +26,11 @@ def adapter_ips(adapters, excluded_nets):
                 for a in adapters if has_ip_v4(a)
                 for ip in netifaces.ifaddresses(a)[netifaces.AF_INET]
                 if non_local(ip) and not in_excluded_networks(ip["addr"],excluded_nets))
+
+def utcnow():
+    """get now() in UTC timezone, across python versions"""
+    have_utcnow = sys.version_info.major_version >= 3 and  sys.version_info.minor_version >= 12
+    return datetime.now(timezone.utc) if have_utcnow else datetime.utcnow()
 
 well_known_port_name = {
     80: "_http._tcp",
