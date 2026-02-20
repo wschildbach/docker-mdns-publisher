@@ -25,7 +25,7 @@ services:
       - PYTHONUNBUFFERED=1 # for prompter logging
       - "EXCLUDED_NETS=172.16.0.0/16" # exclude docker networks (adapt to your machine)
     volumes:
-      # we need access to the docker socket to read other service labels
+      # we need read access to the docker socket to read container labels
       - /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
@@ -48,7 +48,7 @@ docker-mdns-publisher-1  | INFO:docker-mdns-publisher:publishing test1.local
 
 **LOG_LEVEL**
 > This sets the verbosity of logging. Use the [log levels of the python logging module](https://docs.python.org/3/library/logging.html#logging-levels)
-(CRITICAL, ERROR, WARNING, INFO, DEBUG). The default is INFO.
+(CRITICAL, ERROR, WARNING, INFO, DEBUG,TRACE). The default is INFO.
 
 **ADAPTERS**
 > A list of adapters on which the mdns server listens and publishes. If empty, uses all non-local IPv4 adapters.
@@ -80,8 +80,8 @@ services:
     image: alpine
     command: "sleep 15"
     labels:
-      - mdns.publish=test2.local:80
-      - mdns.servicetype=_http._tcp
+      - mdns.publish=test2.local:80 # just for demo purposes, port 80 will be assumed by default
+      - mdns.servicetype=_http._tcp # just for demo purposes, this is the default with port 80
       - mdns.txt=version=1,path=/home/bin/test.exe
 ```
 
@@ -104,5 +104,6 @@ The test services simply wait for a predetermined time, then terminate.
 ## Credits
 The project took inspiration from [github/hardillb/traefik-avahi-helper](https://github.com/hardillb/traefik-avahi-helper)
 which in turn borrows from [github/alticelabs/mdns-publisher](https://github.com/alticelabs/mdns-publisher).
+It now relies on the [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) library.
 
 Many thanks to [Andreas Schildbach](https://github.com/schildbach) for feedback and suggestions to this project.

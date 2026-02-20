@@ -17,7 +17,7 @@
    and registering/deregistering .local domain names when a label mdns.publish=host.local
    is present """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import os
 import logging
