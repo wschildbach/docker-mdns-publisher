@@ -58,10 +58,6 @@ class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
     Publish and unpublish mDNS records."""
 
-    # Set up compiler regexes to find sanitize labels
-    hostnamerule = re.compile(r'^\s*[\w\-\.]+\s*$')
-    localrule = re.compile(r'.+'+LOCAL_DOMAIN+r'\.?')
-
     # ContextManager entry
     def __enter__(self):
         if IP_VERSION !=  zeroconf.IPVersion.V4Only:
@@ -191,12 +187,6 @@ class LocalHostWatcher():
                 if ":" in cname:
                     cname,port = cname.split(':')
                     port=int(port)
-                if not self.localrule.match(cname):
-                    logger.error("cannot register non-local hostname %s; rejected", cname)
-                    continue
-                if not self.hostnamerule.match(cname):
-                    logger.error("invalid hostname %s; rejected", cname)
-                    continue
 
                 # if the cname looks valid, either register or deregister it
                 if action == 'start':
