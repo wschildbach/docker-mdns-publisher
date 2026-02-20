@@ -58,17 +58,20 @@ docker-mdns-publisher-1  | INFO:docker-mdns-publisher:publishing test1.local
 
 ## Using with your services
 
-In your service compose file definition, add a label `mdns.publish=myhost.local` and restart your
-service/container (replace `myhost` with whatever DNS name you want to give your service). The
-daemon then publishes `myhost.local` through mdns, using the interfaces configured above.
+In your service compose file definition, add a label `mdns.publish=<myhost>.local` and restart your
+service/container (replace `<myhost>` with whatever name you want to give your service).
+
+The daemon then publishes an mdns service record, with `<myhost>._http._tcp.local`,
+using the interfaces configured above. The server field is set to `<myhost>.local`.
+
 When the container is stopped, the host is unpublished. Depending on the TTL, it may take some
 time until the change becomes effective.
 
-Additionally, you can change the default port by using `host:port` notation. The default port is 80.
+### Further configuration
 
-The service type is set according to the port, but can be overridden using the mdns.servicetype label.
-
-Finally, txt records can be added by using a `mdns.txt=key1=value1,key2=value2` notation.
+* change the default port by using `mdns.publish=host:port` notation. The default port is 80.
+* the service type is set according to the port, but can be overridden using a `mdns.servicetype=<_myservicetype._tcp>` label.
+* txt records can be added by using `mdns.txt=key1=value1,key2=value2` notation.
 
 Obviously, you could also supply labels in the Dockerfile of your service, or on the command line, if that is more convenient.
 
@@ -89,7 +92,10 @@ services:
 
 To enable debugging on the daemon, set the `LOG_LEVEL` environment variable.
 `LOG_LEVEL` must be set to one of the [standard python log levels](https://docs.python.org/3/library/logging.html#logging-levels).
-TRACING enables debug output for the zeroconf library in addition.
+
+* DEBUG outputs lots of debugging in the daemon itself. In this mode, the daemon also adds txt records to all mdns registrations that give the time and container id when and where the publication was triggered.
+* TRACING enables debug output for the zeroconf library in addition.
+
 You can set this in the compose.yml file:
 
 ```
