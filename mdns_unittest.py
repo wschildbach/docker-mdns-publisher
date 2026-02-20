@@ -47,7 +47,7 @@ class TestRegistration(unittest.TestCase):
 
     def test_register_server_only(self):
         """register foo.local:80"""
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             si = self._lhw.publish("foo.local",80)
             self._lhw.unpublish(si)
 
@@ -57,7 +57,7 @@ class TestRegistration(unittest.TestCase):
 
     def test_pub_unpub_pub(self):
         """If we publish, then unpublish, can we publish again?"""
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             si = self._lhw.publish("foo.local",80)
             self._lhw.unpublish(si)
             si = self._lhw.publish("foo.local",80)
@@ -69,7 +69,7 @@ class TestRegistration(unittest.TestCase):
 
     def test_dotted_cname(self):
         """register foo.local.:80 (ending with period)"""
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             si = self._lhw.publish("foo.local.",80)
             self._lhw.unpublish(si)
 
@@ -79,7 +79,7 @@ class TestRegistration(unittest.TestCase):
 
     def test_cname_with_domain(self):
         """register foo.subdomain.local.:80"""
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             si = self._lhw.publish("foo.subdomain.local",80)
             self._lhw.unpublish(si)
 
@@ -90,14 +90,14 @@ class TestRegistration(unittest.TestCase):
     def test_non_local_domain(self):
         """publish foo.global.:80"""
 
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             with self.assertRaises(ValueError):
                 si = self._lhw.publish("foo.global.",80)
                 self._lhw.unpublish(si)
 
     def test_duplicate_registration(self):
         """Expect a failure publishing twice in a row"""
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             si = self._lhw.publish("foo.local",80)
             with self.assertRaises(ServiceNameAlreadyRegistered):
                 self._lhw.publish("foo.local",80)
@@ -111,14 +111,14 @@ class TestRegistration(unittest.TestCase):
     def test_unknown_port_raises_exception(self):
         """Expect a failure if an unknown port is supplied, but no explicit service"""
 
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             with self.assertRaises(ValueError):
                 self._lhw.publish("foo.local",6789)
 
     def test_servicetype_supplied(self):
         """Supply an unknown port together with a service"""
 
-        with self.assertLogs() as cm:
+        with self.assertLogs():
             with self.assertNotRaises(ValueError):
                 si = self._lhw.publish("foo.local",6789,"_http._tcp")
                 self._lhw.unpublish(si)
