@@ -117,9 +117,10 @@ class LocalHostWatcher():
 
         # to make unique service instance names host1, host2, ....
         self.host_index = 0
-        self.dockerclient = dockerclient
-        self.interfaces = None
-        self.zeroconf = None
+        self.dockerclient = dockerclient # so we know what to listen for
+        self.interfaces = None # the interfaces that we advertise on
+        self.zeroconf = None # the zeroconf instance
+        self.info_store = {} # stores info structures, indexed by container id
 
     def __del__(self):
         pass
@@ -147,8 +148,8 @@ class LocalHostWatcher():
             properties=props
         )
 
-    def publish(self,cname,port,servicetype,props=None):
-        """ publish the given cname """
+    def publish(self,cname,port,servicetype=None,props=None):
+        """ publish the given record """
 
         # the FQDN needs to end with a dot. Supply one to be user friendly
         if not cname.endswith('.'):
@@ -160,15 +161,10 @@ class LocalHostWatcher():
         self.zeroconf.register_service(info, allow_name_change=False)
         return info
 
-    def unpublish(self,cname,port):
-        """ unpublish the given cname """
+    def unpublish(self,info):
+        """ unpublish the given record """
 
-        # the FQDN needs to end with a dot. Supply one to be user friendly
-        if not cname.endswith('.'):
-            cname += '.'
-
-        logger.info("unpublishing %s:%d",cname,port)
-        info = self.mkinfo(cname,port)
+        logger.info("unpublishing %s:%d",info.name,info.port)
         self.zeroconf.unregister_service(info)
 
     def process_event(self,event):
@@ -177,13 +173,13 @@ class LocalHostWatcher():
             container_id = event['Actor']['ID']
             try:
                 container = self.dockerclient.containers.get(container_id)
-                self.process_container(event['Action'],container)
+                self.process_container(container_id,container,event['Action'])
             except URLError as error:
                 # in some cases, containers may have already gone away when we process the event.
                 # consider this harmless but log an error
                 logger.warning("%s",error)
 
-    def process_container(self,action,container):
+    def process_container(self,container_id,container,action):
         """Run when a container triggered start/stop event.
              Checks whether the container has a label "mdns.publish" and if so, either
              registers or deregisters it"""
@@ -202,10 +198,16 @@ class LocalHostWatcher():
                     cname,port = cname.split(':')
                     port=int(port)
 
-                # if the cname looks valid, either register or deregister it
+                # either register or deregister the name
                 if action == 'start':
                     try:
-                        self.publish(cname,port,service_type,props=txt)
+                        if container_id in self.info_store:
+                            logger.error("trying to register more than one service (%s) \
+                               for container %s",cname,container_id)
+                        else:
+                            self.info_store[container_id] = self.publish(
+                                cname,port,service_type,props=txt
+                            )
                     except zeroconf.BadTypeInNameException as error:
                         logger.error("zero conf: bad type in name %s: %s \
                            -- ignoring the service announcement",cname,error.args)
@@ -216,7 +218,12 @@ class LocalHostWatcher():
                         logger.error("zero conf: service name %s is already registered \
                                               -- ignoring the service announcement",cname)
                 elif action == 'die':
-                    self.unpublish(cname,port)
+                    try:
+                        # if the service never was registered, this raises a KeyError
+                        self.unpublish(self.info_store.pop(container_id))
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # catch any and all exceptions here -- we want to never fail
+                        pass
 
     def run(self):
         """Initial scan of running containers and publish hostnames.
@@ -229,7 +236,7 @@ class LocalHostWatcher():
         logger.debug("registering running containers...")
         containers = self.dockerclient.containers.list(filters={"label":"mdns.publish"})
         for container in containers:
-            self.process_container("start", container)
+            self.process_container(container.id, container, "start")
 
         # now listen for Docker events and process them. We may double-process containers that
         # started during the initial iteration, but that is OK.
