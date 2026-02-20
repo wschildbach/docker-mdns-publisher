@@ -56,12 +56,12 @@ class Configuration():
         self.excluded_nets = os.environ.get("EXCLUDED_NETS","")
 
         # These are the standard python log levels
-        log_level = os.environ.get("LOG_LEVEL", "INFO")
-        if log_level=="TRACE":
+        self.log_level = os.environ.get("LOG_LEVEL", "INFO")
+        if self.log_level=="TRACE":
             logging.getLogger("zeroconf").setLevel(logging.DEBUG)
-            log_level = "DEBUG"
+            self.log_level = "DEBUG"
 
-        logging.basicConfig(level=log_level)
+        logging.basicConfig(level=self.log_level)
 
 class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.
@@ -260,4 +260,6 @@ if __name__ == '__main__':
             LOCAL_WATCHER.run() # this will return only if interrupted
     except Exception as exception: # pylint: disable=broad-exception-caught
         # we don't really know which errors to expect here so we catch them all
-        logger.critical("%s",exception)
+        logger.critical("critical error '%s'",exception)
+
+    logger.info("docker-mdns-publisher daemon terminating.")
