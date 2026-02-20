@@ -1,6 +1,7 @@
 """ Utility functions for network adapter and address discovery """
 import ipaddress
 import netifaces
+import zeroconf
 
 def adapter_ips(adapters, excluded_nets):
     """return a list of all suitable ip adresses.
@@ -32,3 +33,27 @@ well_known_port_name = {
     9100: "_pdl-datastream._tcp",
     1883: "_mqtt._tcp"
 }
+
+class IgnoredError(Exception):
+    """Base class for errors that allow continued operation.
+         Generally, this means that the service will not be registered
+         but the daemon keeps running."""
+
+    std = "-- ignoring the service announcement"
+
+    def __init__(self, e, cname=None):
+        if isinstance(e,zeroconf.BadTypeInNameException):
+            super().__init__(f"bad type in name {cname}: {e.args} {self.std}")
+        elif isinstance(e,zeroconf.NonUniqueNameException):
+            super().__init__(f"server {cname} is already registered {self.std}")
+        elif isinstance(e,zeroconf.ServiceNameAlreadyRegistered):
+            super().__init__(f"service {cname} is already registered {self.std}")
+        else:
+            super().__init__(e)
+
+class FatalError(Exception):
+    """Base class for fatal errors.
+         The daemon will terminate."""
+
+    def __init__(self,e):
+        super().__init__(f"{e} Terminating.")

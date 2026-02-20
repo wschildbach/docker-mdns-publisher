@@ -4,8 +4,8 @@ import unittest
 import os
 from unittest import mock
 from contextlib import contextmanager
-from zeroconf import ServiceNameAlreadyRegistered
 import dockersock_watcher as dw
+from utils import IgnoredError,FatalError
 
 class TestEnviron(unittest.TestCase):
     """test all environment variable settings
@@ -16,7 +16,7 @@ class TestEnviron(unittest.TestCase):
         fails for non-existent interfaces"""
 
         with mock.patch.dict(os.environ, {"ADAPTERS": "non-existent"}):
-            with self.assertRaises(ValueError):
+            with self.assertRaises(FatalError):
                 lhw = dw.LocalHostWatcher(None)
                 lhw.__enter__() # pylint: disable=unnecessary-dunder-call
 
@@ -91,7 +91,7 @@ class TestRegistration(unittest.TestCase):
         """publish foo.global.:80"""
 
         with self.assertLogs():
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IgnoredError) as e:
                 si = self._lhw.publish("foo.global.",80)
                 self._lhw.unpublish(si)
 
@@ -99,7 +99,7 @@ class TestRegistration(unittest.TestCase):
         """Expect a failure publishing twice in a row"""
         with self.assertLogs():
             si = self._lhw.publish("foo.local",80)
-            with self.assertRaises(ServiceNameAlreadyRegistered):
+            with self.assertRaises(IgnoredError) as e:
                 self._lhw.publish("foo.local",80)
 
             self._lhw.unpublish(si)
@@ -122,7 +122,7 @@ class TestRegistration(unittest.TestCase):
         """Expect a failure if an unknown port is supplied, but no explicit service"""
 
         with self.assertLogs():
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IgnoredError) as e:
                 self._lhw.publish("foo.local",6789)
 
     def test_servicetype_supplied(self):

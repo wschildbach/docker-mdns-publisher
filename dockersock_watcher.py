@@ -31,7 +31,7 @@ import zeroconf
 import docker
 
 from utils import adapter_ips
-from utils import well_known_port_name
+from utils import well_known_port_name, IgnoredError, FatalError
 
 logger = logging.getLogger("docker-mdns-publisher")
 
@@ -85,7 +85,7 @@ class LocalHostWatcher():
             try:
                 netifaces.ifaddresses(a)
             except ValueError as error:
-                raise ValueError(f'invalid adapter/interface name "{a}": {error}') from error
+                raise FatalError(f'invalid adapter/interface name "{a}": {error}') from error
 
             self.interfaces = adapter_ips(use_adapters, self.config.excluded_nets)
             logger.debug("publishing on interfaces IPs: %s", self.interfaces)
@@ -128,14 +128,14 @@ class LocalHostWatcher():
         props = props or {}
 
         if not cname.endswith(".local."):
-            raise ValueError("only .local domain is supported")
+            raise IgnoredError("only .local domain is supported")
         cname = cname.removesuffix(".local.")
 
         if service_type is None:
             try:
                 service_type = well_known_port_name[port]
             except KeyError as e:
-                raise ValueError("supply a service type with this port") from e
+                raise IgnoredError(f"port {port} is non standard. Supply a service type.") from e
 
         return zeroconf.ServiceInfo(
             f"{service_type}.local.", # fully qualified service type
@@ -156,8 +156,12 @@ class LocalHostWatcher():
 
         logger.info("publishing %s:%d",cname,port)
 
-        info = self.mkinfo(cname,port,servicetype,props=props)
-        self.zeroconf.register_service(info, allow_name_change=False)
+        try:
+            info = self.mkinfo(cname,port,servicetype,props=props)
+            self.zeroconf.register_service(info, allow_name_change=False)
+        except zeroconf.Error as error:
+            raise IgnoredError(error,cname) from error
+
         return info
 
     def unpublish(self,info):
@@ -175,8 +179,10 @@ class LocalHostWatcher():
                 self.process_container(container_id,container,event['Action'])
             except URLError as error:
                 # in some cases, containers may have already gone away when we process the event.
-                # consider this harmless but log an error
+                # consider this harmless and ignore the error
                 logger.warning("%s",error)
+            except IgnoredError as error:
+                logger.error(error)
 
     def process_container(self,container_id,container,action):
         """Run when a container triggered start/stop event.
@@ -216,23 +222,13 @@ class LocalHostWatcher():
 
                 # either register or deregister the name
                 if action == 'start':
-                    try:
-                        if container_id in self.info_store:
-                            logger.error("trying to register more than one service (%s) \
-                               for container %s",cname,container_id)
-                        else:
-                            self.info_store[container_id] = self.publish(
-                                cname,port,service_type,props=txt
-                            )
-                    except zeroconf.BadTypeInNameException as error:
-                        logger.error("zero conf: bad type in name %s: %s \
-                           -- ignoring the service announcement",cname,error.args)
-                    except zeroconf.NonUniqueNameException:
-                        logger.error("zero conf: %s is already registered \
-                                              -- ignoring the service announcement",cname)
-                    except zeroconf.ServiceNameAlreadyRegistered:
-                        logger.error("zero conf: service name %s is already registered \
-                                              -- ignoring the service announcement",cname)
+                    if container_id in self.info_store:
+                        raise IgnoredError(f"trying to register more than one service ({cname}) \
+                                                             for container {container_id}")
+                    self.info_store[container_id] = self.publish(
+                        cname,port,service_type,props=txt
+                    )
+
                 elif action == 'die':
                     try:
                         # if the service never was registered, this raises a KeyError
