@@ -93,6 +93,21 @@ class TestRegistration(unittest.TestCase):
         self.assertEqual(si.port, 80)
         self.assertEqual(si.type,"_http._tcp.local.")
 
+    def test_cname_with_spaces(self):
+        """register "foo 1".local.:80"""
+        with self.assertLogs():
+            with self.assertRaises(IgnoredError) as e:
+                si = self._lhw.publish("foo 1.local",80)
+                self._lhw.unpublish(si)
+            dbg_print(f"EXPECTED: {e.exception}")
+
+    def test_cname_with_umlaut(self):
+        """register öfoo.local.:80"""
+        with self.assertLogs():
+            si = self._lhw.publish("öfoo.local",80)
+            self._lhw.unpublish(si)
+        dbg_print(si)
+
     def test_non_local_domain(self):
         """publish foo.global.:80"""
 
@@ -143,6 +158,15 @@ class TestRegistration(unittest.TestCase):
 
         self.assertEqual(si.port, 6789)
         self.assertEqual(si.type,"_http._tcp.local.")
+
+    def test_servicetype_with_subtype(self):
+        """Supply a service type with subtype"""
+
+        with self.assertLogs():
+            si = self._lhw.publish("foo.local",80,"rest._sub._http._tcp")
+            self._lhw.unpublish(si)
+
+        self.assertEqual(si.type,"rest._sub._http._tcp.local.")
 
     def test_txt_record_kvpair(self):
         """publish txt record with value"""
