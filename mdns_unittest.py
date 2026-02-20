@@ -7,6 +7,12 @@ from contextlib import contextmanager
 import dockersock_watcher as dw
 from utils import IgnoredError,FatalError
 
+VERBOSE=False
+def dbg_print(e):
+    """only used during development."""
+    if VERBOSE:
+        print(e)
+
 class TestEnviron(unittest.TestCase):
     """test all environment variable settings
     """
@@ -94,6 +100,7 @@ class TestRegistration(unittest.TestCase):
             with self.assertRaises(IgnoredError) as e:
                 si = self._lhw.publish("foo.global.",80)
                 self._lhw.unpublish(si)
+            dbg_print(f"EXPECTED: {e.exception}")
 
     def test_duplicate_registration(self):
         """Expect a failure publishing twice in a row"""
@@ -101,6 +108,7 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.local",80)
             with self.assertRaises(IgnoredError) as e:
                 self._lhw.publish("foo.local",80)
+            dbg_print(f"EXPECTED: {e.exception}")
 
             self._lhw.unpublish(si)
 
@@ -124,6 +132,7 @@ class TestRegistration(unittest.TestCase):
         with self.assertLogs():
             with self.assertRaises(IgnoredError) as e:
                 self._lhw.publish("foo.local",6789)
+            dbg_print(f"EXPECTED: {e.exception}")
 
     def test_servicetype_supplied(self):
         """Supply an unknown port together with a service"""
