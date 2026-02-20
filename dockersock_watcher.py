@@ -56,14 +56,12 @@ class Configuration():
         self.excluded_nets = os.environ.get("EXCLUDED_NETS","")
 
         # These are the standard python log levels
-        LOGGING_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
-        print(f"LOGGING_LEVEL={LOGGING_LEVEL}")
-
-        if LOGGING_LEVEL=="TRACE":
+        log_level = os.environ.get("LOG_LEVEL", "INFO")
+        if log_level=="TRACE":
             logging.getLogger("zeroconf").setLevel(logging.DEBUG)
-            LOGGING_LEVEL = "DEBUG"
+            log_level = "DEBUG"
 
-        logging.basicConfig(level=LOGGING_LEVEL)
+        logging.basicConfig(level=log_level)
 
 class LocalHostWatcher():
     """watch the docker socket for starting and dieing containers.

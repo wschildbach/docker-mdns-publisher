@@ -4,8 +4,8 @@ import unittest
 import os
 from unittest import mock
 from contextlib import contextmanager
-import dockersock_watcher as dw
 from zeroconf import ServiceNameAlreadyRegistered
+import dockersock_watcher as dw
 
 class TestEnviron(unittest.TestCase):
     """test all environment variable settings
