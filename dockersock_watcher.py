@@ -136,9 +136,6 @@ class LocalHostWatcher():
             (c) by [Alexx Roche](https://stackoverflow.com/users/1153645/alexx-roche)
             """
 
-            # convert unicode hostname to punycode (python 3 )
-            hostname = hostname.encode("idna").decode()
-
             if len(hostname) > 255:
                 return False
             hostname = hostname.rstrip(".")
@@ -149,11 +146,15 @@ class LocalHostWatcher():
         if not cname.endswith('.'):
             cname += '.'
 
-        if not is_valid_hostname(cname):
+        # convert unicode hostname to punycode (python 3 )
+        servername = cname.encode("idna").decode()
+
+        if not is_valid_hostname(servername):
             raise IgnoredError(f"invalid server name {cname}")
 
         if not cname.endswith(".local."):
             raise IgnoredError("only .local domain is supported")
+
         cname = cname.removesuffix(".local.")
 
         if service_type is None:
@@ -168,7 +169,7 @@ class LocalHostWatcher():
             addresses=self.interfaces,
             port=port,
             host_ttl=self.config.publish_ttl,
-            server = f"{cname}.local.",
+            server = servername,
             properties=props
         )
 
