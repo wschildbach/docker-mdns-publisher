@@ -204,7 +204,7 @@ class LocalHostWatcher():
         txt = make_dict(container.labels.get("mdns.txt",""))
         if self.config.log_level=="DEBUG":
             txt["container_id"]=container_id
-            txt["publish_date"]=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M %Z')
+            txt["publish_date"]=datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M %Z')
 
         if hosts is not None:
             for cname in hosts.split(','):
