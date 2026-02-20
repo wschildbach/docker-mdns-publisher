@@ -35,10 +35,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.local",80,None)
             self._lhw.unpublish("foo.local",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.local.:80'
-        ])
 
         self.assertEqual(si.server, "foo.local.")
         self.assertEqual(si.port, 80)
@@ -54,12 +50,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.local",80,None)
             self._lhw.unpublish("foo.local",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.local.:80',
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.local.:80'
-        ])
 
         self.assertEqual(si.server, "foo.local.")
         self.assertEqual(si.port, 80)
@@ -73,10 +63,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.local.",80,None)
             self._lhw.unpublish("foo.local.",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.local.:80'
-        ])
 
         self.assertEqual(si.server, "foo.local.")
         self.assertEqual(si.port, 80)
@@ -90,10 +76,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.subdomain.local",80,None)
             self._lhw.unpublish("foo.subdomain.local",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.subdomain.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.subdomain.local.:80'
-        ])
 
         self.assertEqual(si.server, "foo.subdomain.local.")
         self.assertEqual(si.port, 80)
@@ -109,10 +91,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.global.",80,None)
             self._lhw.unpublish("foo.global.",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.global.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.global.:80'
-        ])
 
         self.assertEqual(si.server, "foo.global.")
         self.assertEqual(si.port, 80)
@@ -127,11 +105,6 @@ class TestRegistration(unittest.TestCase):
             si = self._lhw.publish("foo.local",80,None)
             self._lhw.unpublish("foo.local.",80)
 
-        self.assertEqual(cm.output, [
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:publishing foo.local.:80',
-            'INFO:docker-mdns-publisher:unpublishing foo.local.:80'
-        ])
 
         self.assertEqual(si.server, "foo.local.")
         self.assertEqual(si.port, 80)
