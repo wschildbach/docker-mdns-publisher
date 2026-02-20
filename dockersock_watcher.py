@@ -115,8 +115,6 @@ class LocalHostWatcher():
         # set our configuration from environment variables
         self.config = Configuration()
 
-        # to make unique service instance names host1, host2, ....
-        self.host_index = 0
         self.dockerclient = dockerclient # so we know what to listen for
         self.interfaces = None # the interfaces that we advertise on
         self.zeroconf = None # the zeroconf instance
@@ -130,21 +128,23 @@ class LocalHostWatcher():
 
         props = props or {}
 
-        self.host_index += 1
+        if not cname.endswith(".local."):
+            raise ValueError("only .local domain is supported")
+        cname = cname.removesuffix(".local.")
 
         if service_type is None:
             try:
-                service_type = well_known_port_name[port] + ".local."
+                service_type = well_known_port_name[port]
             except KeyError as e:
                 raise ValueError("supply a service type with this port") from e
 
         return zeroconf.ServiceInfo(
-            service_type,
-            f"host{self.host_index}.{service_type}",
+            f"{service_type}.local.", # fully qualified service type
+            f"{cname}.{service_type}.local.", # fully qualified service type name
             addresses=self.interfaces,
             port=port,
             host_ttl=self.config.publish_ttl,
-            server = cname,
+            server = f"{cname}.local.",
             properties=props
         )
 
@@ -192,7 +192,7 @@ class LocalHostWatcher():
 
         if hosts is not None:
             for cname in hosts.split(','):
-                # these may not be necessary. python-zeroconf does pretty throrough checking.
+                # detect if specific port is being advertised
                 port = 80
                 if ":" in cname:
                     cname,port = cname.split(':')
