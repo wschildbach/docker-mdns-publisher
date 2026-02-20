@@ -32,21 +32,8 @@ import docker
 from utils import adapter_ips
 from utils import well_known_port_name
 
-# standard TTL is an hour
-PUBLISH_TTL = int(os.environ.get("TTL","3600"))
 # These are the standard python log levels
 LOGGING_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
-# get local domain from enviroment and escape all period characters
-LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
-# for now, hardcoded to IPv4 only
-IP_VERSION = zeroconf.IPVersion.V4Only
-# The adapter(s) to listen on. If empty, will listen on all of them
-# we will listen and publish on all ip adresses of these adapters
-ADAPTERS = os.environ.get("ADAPTERS")
-if ADAPTERS is not None:
-    ADAPTERS=ADAPTERS.split(',')
-# The networks that are excluded from publishing
-EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
 
 logger = logging.getLogger("docker-mdns-publisher")
 logging.basicConfig(level=LOGGING_LEVEL)
@@ -60,12 +47,12 @@ class LocalHostWatcher():
 
     # ContextManager entry
     def __enter__(self):
-        if IP_VERSION !=  zeroconf.IPVersion.V4Only:
-            raise NotImplementedError(f"IP_VERSION {IP_VERSION} not supported")
+        if self.IP_VERSION !=  zeroconf.IPVersion.V4Only:
+            raise NotImplementedError(f"IP_VERSION {self.IP_VERSION} not supported")
 
         # if no adapters were configured, use all interfaces
-        if ADAPTERS:
-            use_adapters = ADAPTERS
+        if self.ADAPTERS:
+            use_adapters = self.ADAPTERS
         else:
             use_adapters = netifaces.interfaces()
             logger.debug("publishing on all interfaces: %s", use_adapters)
@@ -79,10 +66,10 @@ class LocalHostWatcher():
             except ValueError as error:
                 raise ValueError(f'invalid adapter/interface name "{a}": {error}') from error
 
-            self.interfaces = adapter_ips(use_adapters, EXCLUDED_NETS)
+            self.interfaces = adapter_ips(use_adapters, self.EXCLUDED_NETS)
             logger.debug("publishing on interfaces IPs: %s", self.interfaces)
 
-            self.zeroconf = zeroconf.Zeroconf(ip_version=IP_VERSION, interfaces=self.interfaces)
+            self.zeroconf = zeroconf.Zeroconf(ip_version=self.IP_VERSION, interfaces=self.interfaces)
 
         return self
 
@@ -98,8 +85,30 @@ class LocalHostWatcher():
 
         return True  # Suppress exceptions
 
+    def readEnviron(self):
+        # The adapter(s) to listen on. If empty, will listen on all of them
+        # we will listen and publish on all ip adresses of these adapters
+        self.ADAPTERS = os.environ.get("ADAPTERS")
+        if self.ADAPTERS is not None:
+            self.ADAPTERS = self.ADAPTERS.split(',')
+
+        # standard TTL is an hour
+        self.PUBLISH_TTL = int(os.environ.get("TTL","3600"))
+
+        # get local domain from enviroment and escape all period characters
+        self.LOCAL_DOMAIN = re.sub(r'\.','\\.',os.environ.get("LOCAL_DOMAIN",".local"))
+
+        # for now, hardcoded to IPv4 only
+        self.IP_VERSION = zeroconf.IPVersion.V4Only
+
+        # The networks that are excluded from publishing
+        self.EXCLUDED_NETS = os.environ.get("EXCLUDED_NETS","")
+
     def __init__(self,dockerclient):
         """set up the mdns registry"""
+
+        # set our configuration from environment variables
+        self.readEnviron()
 
         # to make unique service instance names host1, host2, ....
         self.host_index = 0
@@ -128,7 +137,7 @@ class LocalHostWatcher():
             f"host{self.host_index}.{service_type}",
             addresses=self.interfaces,
             port=port,
-            host_ttl=PUBLISH_TTL,
+            host_ttl=self.PUBLISH_TTL,
             server = cname,
             properties=props
         )
